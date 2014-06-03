@@ -2,42 +2,37 @@ package command
 
 import (
 	"github.com/codegangsta/cli"
-	"github.com/denkhaus/cloudia/manifest"
+	"github.com/denkhaus/cloudia/engine"
 )
 
 type Commander struct {
-	loader ManifestLoader
+	engine engine.Engine
 	app    *cli.App
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////
-// GetContainers
-///////////////////////////////////////////////////////////////////////////////////////////////
-func (c *Commander) GetContainers(c *cli.Context) Containers {
-	man, err := c.loader.Load(c.String("manifest"))
-	if err != nil {
-
-	}
-	cont, err := man.GetTargetedContainers(c.String("group"))
-	if err != nil {
-
-	}
-	return man.Containers.filter(cont)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (c *Commander) containersCommand(wrapped func(containers Containers), cont *cli.Context) {
-	containers := c.GetContainers(cont)
-	wrapped(containers)
+func (c *Commander) Execute(fn EngineFunc, cont *cli.Context) {
+	path := c.String("manifest")
+	group := c.String("group")
+
+	err := c.engine.LoadFromFile(path, group)
+	if err != nil {
+		//TODO Handle Error
+	}
+
+	err := c.engine.Execute(fn)
+	if err != nil {
+		//TODO Handle Error
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func NewCommander(app *cli.App) *Commander {
-	cmd = &Commander{app: app, loader: ManifestLoader{}}
+	cmd = &Commander{app: app, engine: engine.NewEngine()}
 
 	cmd.NewLiftCommand()
 	cmd.NewProvisionCommand()
@@ -55,12 +50,12 @@ func NewCommander(app *cli.App) *Commander {
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (c *Commander) Register(cmd *cli.Command) {
-	app.Commands = append(app.Commands, cmd)
+	c.app.Commands = append(c.app.Commands, cmd)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (c *Commander) Run(args []string) {
-	app.Run(args)
+	c.app.Run(args)
 }

@@ -15,8 +15,8 @@ func (c *Commander) NewRunCommand() {
 			cli.BoolFlag{"kill, k", false, "when using --force, kill containers instead of stopping them"},
 		},
 		Action: func(c *cli.Context) {
-			containersCommand(func(containers Containers) {
-				containers.run(c.Bool("force"), c.Bool("kill"))
+			c.Execute(func(containers Containers) {
+				return containers.run(c.Bool("force"), c.Bool("kill"))
 			}, c)
 		},
 	})

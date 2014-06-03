@@ -11,8 +11,8 @@ func (c *Commander) NewStatusCommand() {
 		Name:  "status",
 		Usage: "Displays status of containers",
 		Action: func(c *cli.Context) {
-			containersCommand(func(containers Containers) {
-				containers.status()
+			c.Execute(func(containers Containers) {
+				return containers.status()
 			}, c)
 		},
 	})

@@ -11,8 +11,8 @@ func (c *Commander) NewStartCommand() {
 		Name:  "stop",
 		Usage: "Stop the containers",
 		Action: func(c *cli.Context) {
-			containersCommand(func(containers Containers) {
-				containers.stop()
+			c.Execute(func(containers Containers) {
+				return containers.stop()
 			}, c)
 		},
 	})

@@ -1,4 +1,4 @@
-package main
+package engine
 
 import (
 	"fmt"
@@ -17,145 +17,30 @@ type Container struct {
 	Run           RunParameters
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
 func (container *Container) Name() string {
 	return os.ExpandEnv(container.RawName)
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
 func (container *Container) Dockerfile() string {
 	return os.ExpandEnv(container.RawDockerfile)
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
 func (container *Container) Image() string {
 	return os.ExpandEnv(container.RawImage)
 }
 
-func (r *RunParameters) Cidfile() string {
-	return os.ExpandEnv(r.RawCidfile)
-}
-
-func (r *RunParameters) Dns() []string {
-	var dns []string
-	for _, rawDns := range r.RawDns {
-		dns = append(dns, os.ExpandEnv(rawDns))
-	}
-	return dns
-}
-
-func (r *RunParameters) Entrypoint() string {
-	return os.ExpandEnv(r.RawEntrypoint)
-}
-
-func (r *RunParameters) Env() []string {
-	var env []string
-	for _, rawEnv := range r.RawEnv {
-		env = append(env, os.ExpandEnv(rawEnv))
-	}
-	return env
-}
-
-func (r *RunParameters) EnvFile() string {
-	return os.ExpandEnv(r.RawEnvFile)
-}
-
-func (r *RunParameters) Expose() []string {
-	var expose []string
-	for _, rawExpose := range r.RawExpose {
-		expose = append(expose, os.ExpandEnv(rawExpose))
-	}
-	return expose
-}
-
-func (r *RunParameters) Hostname() string {
-	return os.ExpandEnv(r.RawHostname)
-}
-
-func (r *RunParameters) Link() []string {
-	var link []string
-	for _, rawLink := range r.RawLink {
-		link = append(link, os.ExpandEnv(rawLink))
-	}
-	return link
-}
-
-func (r *RunParameters) LxcConf() []string {
-	var lxcConf []string
-	for _, rawLxcConf := range r.RawLxcConf {
-		lxcConf = append(lxcConf, os.ExpandEnv(rawLxcConf))
-	}
-	return lxcConf
-}
-
-func (r *RunParameters) Memory() string {
-	return os.ExpandEnv(r.RawMemory)
-}
-
-func (r *RunParameters) Net() string {
-	// Default to bridge
-	if len(r.RawNet) == 0 {
-		return "bridge"
-	} else {
-		return os.ExpandEnv(r.RawNet)
-	}
-}
-
-func (r *RunParameters) Publish() []string {
-	var publish []string
-	for _, rawPublish := range r.RawPublish {
-		publish = append(publish, os.ExpandEnv(rawPublish))
-	}
-	return publish
-}
-
-func (r *RunParameters) User() string {
-	return os.ExpandEnv(r.RawUser)
-}
-
-func (r *RunParameters) Volume() []string {
-	var volume []string
-	for _, rawVolume := range r.RawVolume {
-		paths := strings.Split(rawVolume, ":")
-		if !path.IsAbs(paths[0]) {
-			cwd, _ := os.Getwd()
-			paths[0] = cwd + "/" + paths[0]
-		}
-		volume = append(volume, os.ExpandEnv(strings.Join(paths, ":")))
-	}
-	return volume
-}
-
-func (r *RunParameters) VolumesFrom() []string {
-	var volumesFrom []string
-	for _, rawVolumesFrom := range r.RawVolumesFrom {
-		volumesFrom = append(volumesFrom, os.ExpandEnv(rawVolumesFrom))
-	}
-	return volumesFrom
-}
-
-func (r *RunParameters) Workdir() string {
-	return os.ExpandEnv(r.RawWorkdir)
-}
-
-func (r *RunParameters) Cmd() []string {
-	var cmd []string
-	if r.RawCmd != nil {
-		switch rawCmd := r.RawCmd.(type) {
-		case string:
-			if len(rawCmd) > 0 {
-				cmd = append(cmd, os.ExpandEnv(rawCmd))
-			}
-		case []interface{}:
-			cmds := make([]string, len(rawCmd))
-			for i, v := range rawCmd {
-				cmds[i] = os.ExpandEnv(v.(string))
-			}
-			cmd = append(cmd, cmds...)
-		default:
-			print.Error("cmd is of unknown type!")
-		}
-	}
-	return cmd
-}
-
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
 func (container *Container) Id() (id string, err error) {
 	if len(container.id) > 0 {
 		id = container.id
@@ -174,6 +59,9 @@ func (container *Container) Id() (id string, err error) {
 	return
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
 func (container *Container) exists() bool {
 	// `ps -a` returns all existant containers
 	id, err := container.Id()
@@ -194,6 +82,9 @@ func (container *Container) exists() bool {
 	}
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
 func (container *Container) running() bool {
 	// `ps` returns all running containers
 	id, err := container.Id()
@@ -214,6 +105,9 @@ func (container *Container) running() bool {
 	}
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
 func (container *Container) imageExists() bool {
 	dockerCmd := []string{"docker", "images", "--no-trunc"}
 	grepCmd := []string{"grep", "-wF", container.Image()}
@@ -229,6 +123,9 @@ func (container *Container) imageExists() bool {
 	}
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
 func (container *Container) status(w *tabwriter.Writer) {
 	args := []string{"inspect", "--format={{.State.Running}}\t{{.ID}}\t{{if .NetworkSettings.IPAddress}}{{.NetworkSettings.IPAddress}}{{else}}-{{end}}\t{{range $k,$v := $.NetworkSettings.Ports}}{{$k}},{{end}}", container.Name()}
 	output, err := commandOutput("docker", args)
@@ -239,6 +136,9 @@ func (container *Container) status(w *tabwriter.Writer) {
 	fmt.Fprintf(w, "%s\t%s\n", container.Name(), output)
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
 // Pull image for container
 func (container *Container) pullImage() {
 	fmt.Printf("Pulling image %s ... ", container.Image())
@@ -246,6 +146,9 @@ func (container *Container) pullImage() {
 	executeCommand("docker", args)
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
 // Build image for container
 func (container *Container) buildImage() {
 	fmt.Printf("Building image %s ... ", container.Image())
@@ -253,6 +156,9 @@ func (container *Container) buildImage() {
 	executeCommand("docker", args)
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
 func (container Container) provision(force bool) {
 	if force || !container.imageExists() {
 		if len(container.Dockerfile()) > 0 {
@@ -265,6 +171,9 @@ func (container Container) provision(force bool) {
 	}
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
 // Run or start container
 func (container Container) runOrStart() {
 	if container.exists() {
@@ -274,6 +183,9 @@ func (container Container) runOrStart() {
 	}
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
 // Run container
 func (container Container) run() {
 	if container.exists() {
@@ -388,6 +300,9 @@ func (container Container) run() {
 	}
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
 // Start container
 func (container Container) start() {
 	if container.exists() {
@@ -401,6 +316,9 @@ func (container Container) start() {
 	}
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
 // Kill container
 func (container Container) kill() {
 	if container.running() {
@@ -410,6 +328,9 @@ func (container Container) kill() {
 	}
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
 // Stop container
 func (container Container) stop() {
 	if container.running() {
@@ -419,6 +340,9 @@ func (container Container) stop() {
 	}
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
 // Remove container
 func (container Container) rm() {
 	if container.exists() {

@@ -1,4 +1,4 @@
-package main
+package engine
 
 import (
 	"fmt"
@@ -7,25 +7,6 @@ import (
 )
 
 type Containers []Container
-
-func containerInGroup(container Container, group []string) bool {
-	for _, groupRawContainerName := range group {
-		if os.ExpandEnv(groupRawContainerName) == container.Name() {
-			return true
-		}
-	}
-	return false
-}
-
-func (containers Containers) filter(group []string) []Container {
-	var filtered []Container
-	for i := 0; i < len(containers); i++ {
-		if containerInGroup(containers[i], group) {
-			filtered = append(filtered, containers[i])
-		}
-	}
-	return filtered
-}
 
 func (containers Containers) reversed() []Container {
 	var reversed []Container

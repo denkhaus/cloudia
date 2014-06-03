@@ -15,9 +15,9 @@ func (c *Commander) NewRemoveCommand() {
 			cli.BoolFlag{"kill, k", false, "when using --force, kill containers instead of stopping them"},
 		},
 		Action: func(c *cli.Context) {
-			containersCommand(func(containers Containers) {
-				containers.remove(c.Bool("force"), c.Bool("kill"))
-			}.c)
+			c.Execute(func(containers Containers) {
+				return containers.remove(c.Bool("force"), c.Bool("kill"))
+			}, c)
 		},
 	})
 }
