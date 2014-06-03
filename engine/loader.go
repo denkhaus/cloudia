@@ -3,8 +3,12 @@ package engine
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"gopkg.in/v1/yaml"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 )
 
 type ManifestLoader struct {
@@ -47,7 +51,7 @@ func (m *ManifestLoader) unmarshalJSON() (Manifest, error) {
 	err := json.Unmarshal(m.data, &manifest)
 	if err != nil {
 		err = m.formatSyntaxError(err)
-		return nil, StatusError{err, 65}
+		return nil, err
 	}
 	return manifest, nil
 }
@@ -60,7 +64,7 @@ func (m *ManifestLoader) unmarshalYAML() (Manifest, error) {
 	err := yaml.Unmarshal(m.data, &manifest)
 	if err != nil {
 		err = m.formatSyntaxError(err)
-		return nil, StatusError{err, 65}
+		return nil, err
 	}
 	return manifest, nil
 }
@@ -81,34 +85,35 @@ func manifestFiles() []string {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (m *ManifestLoader) readFromFile(filename string) (Manifest, error) {
+func (m *ManifestLoader) LoadFromFile(filename string) (Manifest, error) {
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
-		return nil, StatusError{err, 74}
+		return nil, err
 	}
 
 	ext := filepath.Ext(filename)
 	if ext == ".json" {
-		return unmarshalJSON(data)
+		return m.unmarshalJSON()
 	} else if ext == ".yml" || ext == ".yaml" {
-		return unmarshalYAML(data)
+		return m.unmarshalYAML()
 	} else if ext == "" {
-		return unmarshalJSON(data)
+		return m.unmarshalJSON()
 	} else {
-		return nil, StatusError{errors.New("Unrecognized file extension"), 65}
+		return nil, errors.New("Unrecognized file extension")
 	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (m *ManifestLoader) GetManifest(rawManifest string) (Manifest, error) {
+func (m *ManifestLoader) LoadRaw(rawManifest string) (Manifest, error) {
 	if len(rawManifest) > 0 {
-		return m.unmarshalJSON([]byte(rawManifest))
+		m.data = []byte(rawManifest)
+		return m.unmarshalJSON()
 	} else {
 		for _, f := range manifestFiles() {
 			if _, err := os.Stat(f); err == nil {
-				return readFromFile(f)
+				return m.LoadFromFile(f)
 			}
 		}
 	}

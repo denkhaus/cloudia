@@ -10,10 +10,10 @@ func (c *Commander) NewStartCommand() {
 	c.Register(cli.Command{
 		Name:  "stop",
 		Usage: "Stop the containers",
-		Action: func(c *cli.Context) {
+		Action: func(ctx *cli.Context) {
 			c.Execute(func(containers Containers) {
 				return containers.stop()
-			}, c)
+			}, ctx)
 		},
 	})
 }

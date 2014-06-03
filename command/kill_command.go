@@ -10,10 +10,10 @@ func (c *Commander) NewKillCommand() {
 	c.Register(cli.Command{
 		Name:  "kill",
 		Usage: "Kill the containers",
-		Action: func(c *cli.Context) {
+		Action: func(ctx *cli.Context) {
 			c.Execute(func(containers Containers) {
 				return containers.kill()
-			}, c)
+			}, ctx)
 		},
 	})
 }

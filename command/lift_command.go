@@ -15,10 +15,10 @@ func (c *Commander) NewLiftCommand() {
 			cli.BoolFlag{"force, f", false, "rebuild all images"},
 			cli.BoolFlag{"kill, k", false, "kill containers"},
 		},
-		Action: func(c *cli.Context) {
+		Action: func(ctx *cli.Context) {
 			c.Execute(func(containers Containers) {
 				return containers.lift(c.Bool("force"), c.Bool("kill"))
-			}, c)
+			}, ctx)
 		},
 	})
 }

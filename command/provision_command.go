@@ -14,10 +14,10 @@ func (c *Commander) NewProvisionCommand() {
 		Flags: []cli.Flag{
 			cli.BoolFlag{"force, f", false, "rebuild all images"},
 		},
-		Action: func(c *cli.Context) {
+		Action: func(ctx *cli.Context) {
 			c.Execute(func(containers Containers) {
 				return containers.provision(c.Bool("force"))
-			}, c)
+			}, ctx)
 		},
 	})
 }

@@ -10,7 +10,7 @@ import (
 type Manifest struct {
 	Containers Containers          `json:"containers" yaml:"containers"`
 	Groups     map[string][]string `json:"groups" yaml:"groups"`
-	Nodes      map[string][]string `json:"nodes" yaml:"nodes"`
+	Nodes      map[string]string   `json:"nodes" yaml:"nodes"`
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////

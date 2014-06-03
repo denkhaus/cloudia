@@ -6,12 +6,24 @@ import (
 	"text/tabwriter"
 )
 
-type Containers []Container
+type Containers struct {
+	data   []Container
+	engine *Engine
+}
 
-func (containers Containers) reversed() []Container {
+func (c Containers) Apply(data []Container) {
+	//TODO Check dependencies, build dependency tree
+	c.data = data
+}
+
+func (c Containers) IsEmpty() bool {
+	return true
+}
+
+func (c Containers) reversed() []Container {
 	var reversed []Container
-	for i := len(containers) - 1; i >= 0; i-- {
-		reversed = append(reversed, containers[i])
+	for i := len(c.data) - 1; i >= 0; i-- {
+		reversed = append(reversed, c.data[i])
 	}
 	return reversed
 }
@@ -19,84 +31,84 @@ func (containers Containers) reversed() []Container {
 // Lift containers (provision + run).
 // When forced, this will rebuild all images
 // and recreate all containers.
-func (containers Containers) lift(force bool, kill bool) {
-	containers.provision(force)
-	containers.runOrStart(force, kill)
+func (c Containers) lift(force bool, kill bool) {
+	c.provision(force)
+	c.runOrStart(force, kill)
 }
 
 // Provision containers.
 // When forced, this will rebuild all images.
-func (containers Containers) provision(force bool) {
-	for _, container := range containers.reversed() {
-		container.provision(force)
+func (c Containers) provision(force bool) {
+	for _, cont := range c.reversed() {
+		//cont.provision(force)
 	}
 }
 
 // Run containers.
 // When forced, removes existing containers first.
-func (containers Containers) run(force bool, kill bool) {
+func (c Containers) run(force bool, kill bool) {
 	if force {
-		containers.rm(force, kill)
+		c.rm(force, kill)
 	}
-	for _, container := range containers.reversed() {
-		container.run()
+	for _, cont := range c.reversed() {
+		//cont.run()
 	}
 }
 
 // Run or start containers.
 // When forced, removes existing containers first.
-func (containers Containers) runOrStart(force bool, kill bool) {
+func (c Containers) runOrStart(force bool, kill bool) {
 	if force {
-		containers.rm(force, kill)
+		c.rm(force, kill)
 	}
-	for _, container := range containers.reversed() {
-		container.runOrStart()
+	for _, cont := range c.reversed() {
+		//		cont.runOrStart()
 	}
 }
 
 // Start containers.
-func (containers Containers) start() {
-	for _, container := range containers.reversed() {
-		container.start()
+func (c Containers) start() {
+	for _, cont := range c.reversed() {
+		//		cont.start()
 	}
 }
 
 // Kill containers.
-func (containers Containers) kill() {
-	for _, container := range containers {
-		container.kill()
+func (c Containers) kill() {
+	for _, cont := range c.data {
+		//		cont.kill()
 	}
 }
 
 // Stop containers.
-func (containers Containers) stop() {
-	for _, container := range containers {
-		container.stop()
+func (c Containers) stop() {
+	for _, cont := range c.data {
+		//	cont.stop()
 	}
 }
 
 // Remove containers.
 // When forced, stops existing containers first.
-func (containers Containers) rm(force bool, kill bool) {
+func (c Containers) rm(force bool, kill bool) {
 	if force {
 		if kill {
-			containers.kill()
+			c.kill()
 		} else {
-			containers.stop()
+			c.stop()
 		}
 	}
-	for _, container := range containers {
-		container.rm()
+	for _, cont := range c.data {
+		//		cont.rm()
 	}
 }
 
 // Status of containers.
-func (containers Containers) status() {
+func (c Containers) status() {
 	w := new(tabwriter.Writer)
 	w.Init(os.Stdout, 0, 8, 1, '\t', 0)
 	fmt.Fprintln(w, "Name\tRunning\tID\tIP\tPorts")
-	for _, container := range containers {
-		container.status(w)
+	for _, container := range c.data {
+		//	container.status(w)
 	}
 	w.Flush()
 }

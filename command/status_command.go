@@ -10,10 +10,10 @@ func (c *Commander) NewStatusCommand() {
 	c.Register(cli.Command{
 		Name:  "status",
 		Usage: "Displays status of containers",
-		Action: func(c *cli.Context) {
+		Action: func(ctx *cli.Context) {
 			c.Execute(func(containers Containers) {
 				return containers.status()
-			}, c)
+			}, ctx)
 		},
 	})
 }

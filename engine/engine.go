@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"errors"
 	"github.com/tsuru/docker-cluster/cluster"
 )
 
@@ -10,31 +11,29 @@ type Engine struct {
 	cluster    cluster.Cluster
 }
 
-type EngineFunc func(containers Containers) error
+type EngineFunc func(cont Containers) error
+
 ///////////////////////////////////////////////////////////////////////////////////////////////
 // LoadFromFile
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (e *Engine) LoadFromFile(path, group string) error {
-	man, err := e.loader.Load(path)
+	man, err := e.loader.LoadFromFile(path)
 	if err != nil {
-		e.containers = nil
 		return err
 	}
 	//TODO Do we have nodes
 	names, err := man.GetContainerNamesByGroup(group)
 	if err != nil {
-		e.containers = nil
 		return err
 	}
 
-	conts = man.GetContainersByNames(names)	
-	err =: e.cluster.Register(man.Nodes)	
+	conts := man.GetContainersByNames(names)
+	err = e.cluster.Register(man.Nodes)
 	if err != nil {
-		e.containers = nil
 		return err
 	}
-	
-	e.containers = conts
+
+	e.containers.Apply(conts)
 	return nil
 }
 
@@ -42,8 +41,8 @@ func (e *Engine) LoadFromFile(path, group string) error {
 // Execute
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (e *Engine) Execute(fn EngineFunc) error {
-	if e.containers == nil {
-		return StatusError{errors.New("No containers loaded"), 22}
+	if e.containers.IsEmpty() {
+		return errors.New("No containers loaded")
 	}
 
 	return fn(e.containers)
@@ -53,7 +52,7 @@ func (e *Engine) Execute(fn EngineFunc) error {
 // NewEngine
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func NewEngine() *Engine {
-	eng := &Engine{loader: manifest.ManifestLoader{}}
+	eng := &Engine{loader: ManifestLoader{}}
 	eng.cluster = cluster.New()
 	return eng
 }
