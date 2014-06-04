@@ -46,46 +46,33 @@ func (m *ManifestLoader) formatSyntaxError(syntaxError error) (err error) {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (m *ManifestLoader) unmarshalJSON() (Manifest, error) {
-	var manifest Manifest
-	err := json.Unmarshal(m.data, &manifest)
+func (m *ManifestLoader) unmarshalJSON() (*Manifest, error) {
+	man := &Manifest{}
+	err := json.Unmarshal(m.data, man)
 	if err != nil {
 		err = m.formatSyntaxError(err)
 		return nil, err
 	}
-	return manifest, nil
+	return man, nil
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (m *ManifestLoader) unmarshalYAML() (Manifest, error) {
-	var manifest Manifest
-	err := yaml.Unmarshal(m.data, &manifest)
+func (m *ManifestLoader) unmarshalYAML() (*Manifest, error) {
+	man := &Manifest{}
+	err := yaml.Unmarshal(m.data, man)
 	if err != nil {
 		err = m.formatSyntaxError(err)
 		return nil, err
 	}
-	return manifest, nil
+	return man, nil
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func manifestFiles() []string {
-	var result = []string(nil)
-	if len(options.manifest) > 0 {
-		result = []string{options.manifest}
-	} else {
-		result = defaultManifests
-	}
-	return result
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////
-//
-///////////////////////////////////////////////////////////////////////////////////////////////
-func (m *ManifestLoader) LoadFromFile(filename string) (Manifest, error) {
+func (m *ManifestLoader) LoadFromFile(filename string) (*Manifest, error) {
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, err
@@ -106,17 +93,24 @@ func (m *ManifestLoader) LoadFromFile(filename string) (Manifest, error) {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (m *ManifestLoader) LoadRaw(rawManifest string) (Manifest, error) {
+func (m *ManifestLoader) LoadRaw(rawManifest string) (*Manifest, error) {
 	if len(rawManifest) > 0 {
 		m.data = []byte(rawManifest)
 		return m.unmarshalJSON()
-	} else {
-		for _, f := range manifestFiles() {
-			if _, err := os.Stat(f); err == nil {
-				return m.LoadFromFile(f)
-			}
+	}
+
+	return nil, fmt.Errorf("LoadRaw::no manifest found")
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
+func (m *ManifestLoader) LoadDefault() (*Manifest, error) {
+	for _, f := range defaultManifests {
+		if _, err := os.Stat(f); err == nil {
+			return m.LoadFromFile(f)
 		}
 	}
 
-	return nil, StatusError{fmt.Errorf("no manifest found %v", manifestFiles()), 78}
+	return nil, fmt.Errorf("no manifest found %v", defaultManifests)
 }
