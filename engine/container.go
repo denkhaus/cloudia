@@ -1,17 +1,20 @@
 package engine
 
 import (
-//	"fmt"
-//	"os"
-//	"strconv"
-//	"text/tabwriter"
+	"container/list"
+	//	"fmt"
+	//	"os"
+	//	"strconv"
+	//	"text/tabwriter"
 )
 
 type Container struct {
 	id            string
-	RawName       string `json:"name" yaml:"name"`
-	RawDockerfile string `json:"dockerfile" yaml:"dockerfile"`
-	RawImage      string `json:"image" yaml:"image"`
+	elm           *Element //tree building in linked list
+	RawName       string   `json:"name" yaml:"name"`
+	RawDockerfile string   `json:"dockerfile" yaml:"dockerfile"`
+	RawImage      string   `json:"image" yaml:"image"`
+	Dependencies  []string `json:"depends" yaml:"depends"`
 	Run           RunParameters
 }
 

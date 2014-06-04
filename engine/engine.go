@@ -42,7 +42,7 @@ func (e *Engine) LoadFromFile(path, group string) error {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (e *Engine) Execute(fn EngineFunc) error {
 	if e.containers.IsEmpty() {
-		return errors.New("No containers loaded")
+		return errors.New("no containers loaded")
 	}
 
 	return fn(e.containers)

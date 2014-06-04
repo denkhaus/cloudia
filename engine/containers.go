@@ -1,114 +1,216 @@
 package engine
 
 import (
+	"container/list"
 	"fmt"
 	"os"
 	"text/tabwriter"
 )
 
+type ContainerFunc func(cont Container) error
 type Containers struct {
-	data   []Container
 	engine *Engine
+	tree   *Tree
 }
 
-func (c Containers) Apply(data []Container) {
-	//TODO Check dependencies, build dependency tree
-	c.data = data
-}
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
+func (c Containers) Apply(conts []Container) error {
 
-func (c Containers) IsEmpty() bool {
-	return true
-}
+	tree := NewTree()
+	for cont := range conts {
+		//check if container is required
+		var requiredIns *Element
+		nRequiredIdx := math.MaxInt64
+		for e := c.tree.Front(); e != nil; e = e.Next() {
+			cnt := e.Value.(Container)
+			for name := range cnt.Dependencies {
+				if name == cont.Name() {
+					idx := t.GetIndex(cnt)
+					if idx < nRequiredIdx {
+						requiredIns = cnt.elm
+						nRequiredIdx = idx
+					}
+				}
+			}
+		}
 
-func (c Containers) reversed() []Container {
-	var reversed []Container
-	for i := len(c.data) - 1; i >= 0; i-- {
-		reversed = append(reversed, c.data[i])
+		deps := cont.Dependencies
+		if len(deps) == 0 && requiredIns == nil {
+			//if is not required and has no requirements
+			tree.TreePushBack(cont)
+			continue
+		}
+
+		//check if container has requirements
+		var hasRequirementsIns *Element
+		nHasRequirementsIdx := math.MaxInt64
+		for name := range deps {
+			cnt := tree.GetContainerByName(name)
+			if cnt != nil {
+				idx := t.GetIndex(cnt)
+				if idx < nHasRequirementsIdx {
+					hasRequirementsIns = cnt.elm
+					nHasRequirementsIdx = idx
+				}
+			} else {
+				tree.AddUnmetDependency(name)
+			}
+		}
+
+		// try to insert before nRequiredIdx and after nHasRequirementsIdx
+
+		if hasRequirementsIns != nil && requiredIns == nil { // only has requirements
+			tree.TreeInsertAfter(cont, hasRequirementsIns)
+		} else if hasRequirementsIns == nil && requiredIns != nil { //only is required
+			tree.TreeInsertBefore(cont, requiredIns)
+		} else {
+			if nRequiredIdx <= nHasRequirementsIdx {
+				//
+			}
+		}
 	}
-	return reversed
+
+	c.tree = tree
+	return nil
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
+func (c Containers) IsEmpty() bool {
+	return c.tree.Len() == 0
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
+func (c Containers) ForAll(fn ContainerFunc) error {
+	for e := c.tree.Front(); e != nil; e = e.Next() {
+		if err := fn(e.Value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
 // Lift containers (provision + run).
 // When forced, this will rebuild all images
 // and recreate all containers.
+///////////////////////////////////////////////////////////////////////////////////////////////
 func (c Containers) lift(force bool, kill bool) {
-	c.provision(force)
-	c.runOrStart(force, kill)
+	if err := c.provision(force); err != nil {
+		return err
+	}
+	if err := c.runOrStart(force, kill); err != nil {
+		return err
+	}
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////
 // Provision containers.
 // When forced, this will rebuild all images.
-func (c Containers) provision(force bool) {
-	for _, cont := range c.reversed() {
-		//cont.provision(force)
-	}
+///////////////////////////////////////////////////////////////////////////////////////////////
+func (c Containers) provision(force bool) error {
+	err := c.ForAll(func(cont Container) error {
+		return cont.provision(force)
+	})
+	return err
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////
 // Run containers.
 // When forced, removes existing containers first.
-func (c Containers) run(force bool, kill bool) {
+///////////////////////////////////////////////////////////////////////////////////////////////
+func (c Containers) run(force bool, kill bool) error {
 	if force {
-		c.rm(force, kill)
-	}
-	for _, cont := range c.reversed() {
-		//cont.run()
-	}
-}
-
-// Run or start containers.
-// When forced, removes existing containers first.
-func (c Containers) runOrStart(force bool, kill bool) {
-	if force {
-		c.rm(force, kill)
-	}
-	for _, cont := range c.reversed() {
-		//		cont.runOrStart()
-	}
-}
-
-// Start containers.
-func (c Containers) start() {
-	for _, cont := range c.reversed() {
-		//		cont.start()
-	}
-}
-
-// Kill containers.
-func (c Containers) kill() {
-	for _, cont := range c.data {
-		//		cont.kill()
-	}
-}
-
-// Stop containers.
-func (c Containers) stop() {
-	for _, cont := range c.data {
-		//	cont.stop()
-	}
-}
-
-// Remove containers.
-// When forced, stops existing containers first.
-func (c Containers) rm(force bool, kill bool) {
-	if force {
-		if kill {
-			c.kill()
-		} else {
-			c.stop()
+		if err := c.rm(force, kill); err != nil {
+			return err
 		}
 	}
-	for _, cont := range c.data {
-		//		cont.rm()
-	}
+	err := c.ForAll(func(cont Container) error {
+		return cont.run()
+	})
+
+	return err
 }
 
-// Status of containers.
-func (c Containers) status() {
-	w := new(tabwriter.Writer)
-	w.Init(os.Stdout, 0, 8, 1, '\t', 0)
-	fmt.Fprintln(w, "Name\tRunning\tID\tIP\tPorts")
-	for _, container := range c.data {
-		//	container.status(w)
+///////////////////////////////////////////////////////////////////////////////////////////////
+// Run or start containers.
+// When forced, removes existing containers first.
+///////////////////////////////////////////////////////////////////////////////////////////////
+func (c Containers) runOrStart(force bool, kill bool) error {
+	if force {
+		if err := c.rm(force, kill); err != nil {
+			return err
+		}
 	}
-	w.Flush()
+	err := c.ForAll(func(cont Container) error {
+		return cont.runOrStart()
+	})
+	return err
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+// Start containers.
+///////////////////////////////////////////////////////////////////////////////////////////////
+func (c Containers) start() error {
+	err := c.ForAll(func(cont Container) error {
+		return cont.start()
+	})
+	return err
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+// Kill containers.
+///////////////////////////////////////////////////////////////////////////////////////////////
+func (c Containers) kill() error {
+	err := c.ForAll(func(cont Container) error {
+		return cont.kill()
+	})
+	return err
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+// Stop containers.
+///////////////////////////////////////////////////////////////////////////////////////////////
+func (c Containers) stop() error {
+	err := c.ForAll(func(cont Container) error {
+		return cont.stop()
+	})
+	return err
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+// Remove containers.
+// When forced, stops existing containers first.
+///////////////////////////////////////////////////////////////////////////////////////////////
+func (c Containers) rm(force bool, kill bool) error {
+	if force {
+		if kill {
+			if err := c.kill(); err != nil {
+				return err
+			}
+		} else {
+			if err := c.stop(); err != nil {
+				return err
+			}
+		}
+	}
+	err := c.ForAll(func(cont Container) error {
+		return cont.rm()
+	})
+	return err
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+// Status of containers.
+///////////////////////////////////////////////////////////////////////////////////////////////
+func (c Containers) status() error {
+	err := c.ForAll(func(cont Container) error {
+		return cont.status()
+	})
+	return err
 }
