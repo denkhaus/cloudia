@@ -1,5 +1,11 @@
 package engine
 
+import (
+	"os"
+	"path"
+	"strings"
+)
+
 type RunParameters struct {
 	RawCidfile     string      `json:"cidfile" yaml:"cidfile"`
 	CpuShares      int         `json:"cpu-shares" yaml:"cpu-shares"`

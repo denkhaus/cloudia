@@ -21,8 +21,10 @@ func (e *Engine) LoadFromFile(path, group string) error {
 	if err != nil {
 		return err
 	}
+
 	//TODO Do we have nodes
-	names, err := man.GetContainerNamesByGroup(group)
+	names := man.GetContainerNamesByGroup(group)
+	//, fmt.Errorf("no group nor container matching `%s`", group)
 	if err != nil {
 		return err
 	}

@@ -2,9 +2,10 @@ package engine
 
 import (
 	"container/list"
-	"fmt"
-	"os"
-	"text/tabwriter"
+	"math"
+	//	"fmt"
+	//	"os"
+	//	"text/tabwriter"
 )
 
 type ContainerFunc func(cont Container) error
@@ -19,15 +20,15 @@ type Containers struct {
 func (c Containers) Apply(conts []Container) error {
 
 	tree := NewTree()
-	for cont := range conts {
+	for _, cont := range conts {
 		//check if container is required
-		var requiredIns *Element
+		var requiredIns *list.Element
 		nRequiredIdx := math.MaxInt64
 		for e := c.tree.Front(); e != nil; e = e.Next() {
 			cnt := e.Value.(Container)
-			for name := range cnt.Dependencies {
+			for _, name := range cnt.Requirements {
 				if name == cont.Name() {
-					idx := t.GetIndex(cnt)
+					idx := tree.GetIndex(cnt)
 					if idx < nRequiredIdx {
 						requiredIns = cnt.elm
 						nRequiredIdx = idx
@@ -36,7 +37,7 @@ func (c Containers) Apply(conts []Container) error {
 			}
 		}
 
-		deps := cont.Dependencies
+		deps := cont.Requirements
 		if len(deps) == 0 && requiredIns == nil {
 			//if is not required and has no requirements
 			tree.TreePushBack(cont)
@@ -44,12 +45,12 @@ func (c Containers) Apply(conts []Container) error {
 		}
 
 		//check if container has requirements
-		var hasRequirementsIns *Element
+		var hasRequirementsIns *list.Element
 		nHasRequirementsIdx := math.MaxInt64
-		for name := range deps {
-			cnt := tree.GetContainerByName(name)
-			if cnt != nil {
-				idx := t.GetIndex(cnt)
+		for _, name := range deps {
+			c := tree.GetContainerByName(name)
+			if cnt, ok := c.(Container); ok {
+				idx := tree.GetIndex(cnt)
 				if idx < nHasRequirementsIdx {
 					hasRequirementsIns = cnt.elm
 					nHasRequirementsIdx = idx
@@ -88,7 +89,19 @@ func (c Containers) IsEmpty() bool {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (c Containers) ForAll(fn ContainerFunc) error {
 	for e := c.tree.Front(); e != nil; e = e.Next() {
-		if err := fn(e.Value); err != nil {
+		if err := fn(e.Value.(Container)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
+func (c Containers) ForAllReversed(fn ContainerFunc) error {
+	for e := c.tree.Back(); e != nil; e = e.Prev() {
+		if err := fn(e.Value.(Container)); err != nil {
 			return err
 		}
 	}
@@ -100,13 +113,15 @@ func (c Containers) ForAll(fn ContainerFunc) error {
 // When forced, this will rebuild all images
 // and recreate all containers.
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (c Containers) lift(force bool, kill bool) {
+func (c Containers) lift(force bool, kill bool) error {
 	if err := c.provision(force); err != nil {
 		return err
 	}
 	if err := c.runOrStart(force, kill); err != nil {
 		return err
 	}
+
+	return nil
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -167,7 +182,7 @@ func (c Containers) start() error {
 // Kill containers.
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (c Containers) kill() error {
-	err := c.ForAll(func(cont Container) error {
+	err := c.ForAllReversed(func(cont Container) error {
 		return cont.kill()
 	})
 	return err
@@ -177,7 +192,7 @@ func (c Containers) kill() error {
 // Stop containers.
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (c Containers) stop() error {
-	err := c.ForAll(func(cont Container) error {
+	err := c.ForAllReversed(func(cont Container) error {
 		return cont.stop()
 	})
 	return err
@@ -199,7 +214,7 @@ func (c Containers) rm(force bool, kill bool) error {
 			}
 		}
 	}
-	err := c.ForAll(func(cont Container) error {
+	err := c.ForAllReversed(func(cont Container) error {
 		return cont.rm()
 	})
 	return err
