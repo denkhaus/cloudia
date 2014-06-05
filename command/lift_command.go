@@ -1,8 +1,8 @@
 package command
 
 import (
-	"errors"
 	"github.com/codegangsta/cli"
+	"github.com/denkhaus/cloudia/engine"
 )
 
 //lift will use specified Dockerfiles to build all the containers, or the specified one(s).
@@ -12,12 +12,12 @@ func (c *Commander) NewLiftCommand() {
 		Name:  "lift",
 		Usage: "Build or pull images, then run or start the containers",
 		Flags: []cli.Flag{
-			cli.BoolFlag{"force, f", false, "rebuild all images"},
-			cli.BoolFlag{"kill, k", false, "kill containers"},
+			cli.BoolFlag{"force, f", "rebuild all images"},
+			cli.BoolFlag{"kill, k", "kill containers"},
 		},
 		Action: func(ctx *cli.Context) {
-			c.Execute(func(containers Containers) {
-				return containers.lift(c.Bool("force"), c.Bool("kill"))
+			c.Execute(func(containers engine.Containers) error {
+				return containers.Lift(ctx.Bool("force"), ctx.Bool("kill"))
 			}, ctx)
 		},
 	})

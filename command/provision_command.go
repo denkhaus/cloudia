@@ -1,8 +1,8 @@
 package command
 
 import (
-	"errors"
 	"github.com/codegangsta/cli"
+	"github.com/denkhaus/cloudia/engine"
 )
 
 //provision will use specified Dockerfiles to build all the containers, or the specified one(s).
@@ -12,11 +12,11 @@ func (c *Commander) NewProvisionCommand() {
 		Name:  "provision",
 		Usage: "Build or pull images",
 		Flags: []cli.Flag{
-			cli.BoolFlag{"force, f", false, "rebuild all images"},
+			cli.BoolFlag{"force, f", "rebuild all images"},
 		},
 		Action: func(ctx *cli.Context) {
-			c.Execute(func(containers Containers) {
-				return containers.provision(c.Bool("force"))
+			c.Execute(func(containers engine.Containers) error {
+				return containers.Provision(ctx.Bool("force"))
 			}, ctx)
 		},
 	})

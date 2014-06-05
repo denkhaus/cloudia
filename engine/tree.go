@@ -5,6 +5,7 @@ import (
 )
 
 type Tree struct {
+	unmet map[string]interface{}
 	list.List
 }
 
@@ -20,7 +21,6 @@ func (t *Tree) GetIndex(cont interface{}) int {
 		nIndex++
 	}
 
-	//not found
 	return -1
 }
 
@@ -43,7 +43,7 @@ func (t *Tree) GetContainerByName(name string) interface{} {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (t *Tree) TreePushBack(cont Container) *list.Element {
 	elm := t.PushBack(cont)
-	t.RemoveUnmetDependency(cont.Name())
+	t.RemoveUnmetRequirement(cont.Name())
 	return elm
 }
 
@@ -52,7 +52,7 @@ func (t *Tree) TreePushBack(cont Container) *list.Element {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (t *Tree) TreeInsertBefore(cont Container, elm *list.Element) *list.Element {
 	newElm := t.InsertBefore(cont, elm)
-	t.RemoveUnmetDependency(cont.Name())
+	t.RemoveUnmetRequirement(cont.Name())
 	return newElm
 }
 
@@ -61,22 +61,26 @@ func (t *Tree) TreeInsertBefore(cont Container, elm *list.Element) *list.Element
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (t *Tree) TreeInsertAfter(cont Container, elm *list.Element) *list.Element {
 	newElm := t.InsertAfter(cont, elm)
-	t.RemoveUnmetDependency(cont.Name())
+	t.RemoveUnmetRequirement(cont.Name())
 	return newElm
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (t *Tree) RemoveUnmetDependency(name string) {
-
+func (t *Tree) RemoveUnmetRequirement(name string) {
+	if _, ok := t.unmet[name]; ok {
+		delete(t.unmet, name)
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (t *Tree) AddUnmetDependency(name string) {
-
+func (t *Tree) AddUnmetRequirement(name string) {
+	if _, ok := t.unmet[name]; !ok {
+		t.unmet[name] = name
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////

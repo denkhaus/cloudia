@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"errors"
 	"os"
 	"path"
 	"strings"
@@ -27,8 +28,8 @@ type RunParameters struct {
 	Rm             bool        `json:"rm" yaml:"rm"`
 	Tty            bool        `json:"tty" yaml:"tty"`
 	RawUser        string      `json:"user" yaml:"user"`
-	RawVolume      []string    `json:"volume" yaml:"volume"`
-	RawVolumesFrom []string    `json:"volumes-from" yaml:"volumes-from"`
+	RawVolumes     []string    `json:"volume" yaml:"volume"`
+	RawVolumesFrom string      `json:"volumes-from" yaml:"volumes-from"`
 	RawWorkdir     string      `json:"workdir" yaml:"workdir"`
 	RawCmd         interface{} `json:"cmd" yaml:"cmd"`
 }
@@ -146,6 +147,9 @@ func (r *RunParameters) Publish() []string {
 	return publish
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
 func (r *RunParameters) User() string {
 	return os.ExpandEnv(r.RawUser)
 }
@@ -153,28 +157,20 @@ func (r *RunParameters) User() string {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (r *RunParameters) Volume() []string {
-	var volume []string
+func (r *RunParameters) Volumes() []string {
+	var volumes []string
 	for _, rawVolume := range r.RawVolume {
 		paths := strings.Split(rawVolume, ":")
-		if !path.IsAbs(paths[0]) {
-			cwd, _ := os.Getwd()
-			paths[0] = cwd + "/" + paths[0]
-		}
-		volume = append(volume, os.ExpandEnv(strings.Join(paths, ":")))
+		volumes = append(volumes, os.ExpandEnv(strings.Join(paths, ":")))
 	}
-	return volume
+	return volumes
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (r *RunParameters) VolumesFrom() []string {
-	var volumesFrom []string
-	for _, rawVolumesFrom := range r.RawVolumesFrom {
-		volumesFrom = append(volumesFrom, os.ExpandEnv(rawVolumesFrom))
-	}
-	return volumesFrom
+func (r *RunParameters) VolumesFrom() string {
+	return os.ExpandEnv(r.RawVolumesFrom)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -187,23 +183,23 @@ func (r *RunParameters) Workdir() string {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (r *RunParameters) Cmd() []string {
+func (r *RunParameters) Cmd() ([]string, error) {
 	var cmd []string
 	if r.RawCmd != nil {
 		switch rawCmd := r.RawCmd.(type) {
 		case string:
 			if len(rawCmd) > 0 {
-				cmd = append(cmd, os.ExpandEnv(rawCmd))
+				return append(cmd, os.ExpandEnv(rawCmd)), nil
 			}
 		case []interface{}:
 			cmds := make([]string, len(rawCmd))
 			for i, v := range rawCmd {
 				cmds[i] = os.ExpandEnv(v.(string))
 			}
-			cmd = append(cmd, cmds...)
-		default:
-			print.Error("cmd is of unknown type!")
+			return append(cmd, cmds...), nil
 		}
 	}
-	return cmd
+
+	//TODO more verbose error notification
+	return nil, errors.New("cmd is of unknown type!")
 }

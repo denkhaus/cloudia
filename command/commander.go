@@ -6,23 +6,23 @@ import (
 )
 
 type Commander struct {
-	engine engine.Engine
+	engine *engine.Engine
 	app    *cli.App
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (c *Commander) Execute(fn EngineFunc, cont *cli.Context) {
-	path := c.String("manifest")
-	group := c.String("group")
+func (c *Commander) Execute(fn engine.EngineFunc, ctx *cli.Context) {
+	path := ctx.String("manifest")
+	group := ctx.String("group")
 
 	err := c.engine.LoadFromFile(path, group)
 	if err != nil {
 		//TODO Handle Error
 	}
 
-	err := c.engine.Execute(fn)
+	err = c.engine.Execute(fn)
 	if err != nil {
 		//TODO Handle Error
 	}
@@ -31,8 +31,13 @@ func (c *Commander) Execute(fn EngineFunc, cont *cli.Context) {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func NewCommander(app *cli.App) *Commander {
-	cmd = &Commander{app: app, engine: engine.NewEngine()}
+func NewCommander(app *cli.App) (*Commander, error) {
+	cmd := &Commander{app: app}
+	if engine, err := engine.NewEngine(); err != nil {
+		cmd.engine = engine
+	} else {
+		return nil, err
+	}
 
 	cmd.NewLiftCommand()
 	cmd.NewProvisionCommand()
@@ -43,13 +48,13 @@ func NewCommander(app *cli.App) *Commander {
 	cmd.NewKillCommand()
 	cmd.NewStatusCommand()
 
-	return cmd
+	return cmd, nil
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (c *Commander) Register(cmd *cli.Command) {
+func (c *Commander) Register(cmd cli.Command) {
 	c.app.Commands = append(c.app.Commands, cmd)
 }
 

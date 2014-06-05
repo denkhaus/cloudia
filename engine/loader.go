@@ -78,6 +78,7 @@ func (m *ManifestLoader) LoadFromFile(filename string) (*Manifest, error) {
 		return nil, err
 	}
 
+	m.data = data
 	ext := filepath.Ext(filename)
 	if ext == ".json" {
 		return m.unmarshalJSON()

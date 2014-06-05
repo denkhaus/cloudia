@@ -1,18 +1,18 @@
 package command
 
 import (
-	"errors"
 	"github.com/codegangsta/cli"
+	"github.com/denkhaus/cloudia/engine"
 )
 
 //stop will call docker stop on all containers, or the specified one(s).
-func (c *Commander) NewStartCommand() {
+func (c *Commander) NewStopCommand() {
 	c.Register(cli.Command{
 		Name:  "stop",
 		Usage: "Stop the containers",
 		Action: func(ctx *cli.Context) {
-			c.Execute(func(containers Containers) {
-				return containers.stop()
+			c.Execute(func(containers engine.Containers) error {
+				return containers.Stop()
 			}, ctx)
 		},
 	})

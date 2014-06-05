@@ -3,9 +3,6 @@ package engine
 import (
 	"container/list"
 	"math"
-	//	"fmt"
-	//	"os"
-	//	"text/tabwriter"
 )
 
 type ContainerFunc func(cont Container) error
@@ -56,7 +53,7 @@ func (c Containers) Apply(conts []Container) error {
 					nHasRequirementsIdx = idx
 				}
 			} else {
-				tree.AddUnmetDependency(name)
+				tree.AddUnmetRequirement(name)
 			}
 		}
 
@@ -73,6 +70,7 @@ func (c Containers) Apply(conts []Container) error {
 		}
 	}
 
+	//TODO check unmet requirements
 	c.tree = tree
 	return nil
 }
@@ -113,8 +111,8 @@ func (c Containers) ForAllReversed(fn ContainerFunc) error {
 // When forced, this will rebuild all images
 // and recreate all containers.
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (c Containers) lift(force bool, kill bool) error {
-	if err := c.provision(force); err != nil {
+func (c Containers) Lift(force bool, kill bool) error {
+	if err := c.Provision(force); err != nil {
 		return err
 	}
 	if err := c.runOrStart(force, kill); err != nil {
@@ -128,7 +126,7 @@ func (c Containers) lift(force bool, kill bool) error {
 // Provision containers.
 // When forced, this will rebuild all images.
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (c Containers) provision(force bool) error {
+func (c Containers) Provision(force bool) error {
 	err := c.ForAll(func(cont Container) error {
 		return cont.provision(force)
 	})
@@ -139,9 +137,9 @@ func (c Containers) provision(force bool) error {
 // Run containers.
 // When forced, removes existing containers first.
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (c Containers) run(force bool, kill bool) error {
+func (c Containers) Run(force bool, kill bool) error {
 	if force {
-		if err := c.rm(force, kill); err != nil {
+		if err := c.Remove(force, kill); err != nil {
 			return err
 		}
 	}
@@ -158,7 +156,7 @@ func (c Containers) run(force bool, kill bool) error {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (c Containers) runOrStart(force bool, kill bool) error {
 	if force {
-		if err := c.rm(force, kill); err != nil {
+		if err := c.Remove(force, kill); err != nil {
 			return err
 		}
 	}
@@ -171,7 +169,7 @@ func (c Containers) runOrStart(force bool, kill bool) error {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 // Start containers.
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (c Containers) start() error {
+func (c Containers) Start() error {
 	err := c.ForAll(func(cont Container) error {
 		return cont.start()
 	})
@@ -181,7 +179,7 @@ func (c Containers) start() error {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 // Kill containers.
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (c Containers) kill() error {
+func (c Containers) Kill() error {
 	err := c.ForAllReversed(func(cont Container) error {
 		return cont.kill()
 	})
@@ -191,7 +189,7 @@ func (c Containers) kill() error {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 // Stop containers.
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (c Containers) stop() error {
+func (c Containers) Stop() error {
 	err := c.ForAllReversed(func(cont Container) error {
 		return cont.stop()
 	})
@@ -202,14 +200,14 @@ func (c Containers) stop() error {
 // Remove containers.
 // When forced, stops existing containers first.
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (c Containers) rm(force bool, kill bool) error {
+func (c Containers) Remove(force bool, kill bool) error {
 	if force {
 		if kill {
-			if err := c.kill(); err != nil {
+			if err := c.Kill(); err != nil {
 				return err
 			}
 		} else {
-			if err := c.stop(); err != nil {
+			if err := c.Stop(); err != nil {
 				return err
 			}
 		}
@@ -223,7 +221,7 @@ func (c Containers) rm(force bool, kill bool) error {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 // Status of containers.
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (c Containers) status() error {
+func (c Containers) Status() error {
 	err := c.ForAll(func(cont Container) error {
 		return cont.status()
 	})

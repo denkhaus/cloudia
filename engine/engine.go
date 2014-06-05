@@ -8,7 +8,7 @@ import (
 type Engine struct {
 	loader     ManifestLoader
 	containers Containers
-	cluster    cluster.Cluster
+	cluster    *cluster.Cluster
 }
 
 type EngineFunc func(cont Containers) error
@@ -53,8 +53,13 @@ func (e *Engine) Execute(fn EngineFunc) error {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 // NewEngine
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func NewEngine() *Engine {
+func NewEngine() (*Engine, error) {
 	eng := &Engine{loader: ManifestLoader{}}
-	eng.cluster = cluster.New()
-	return eng
+	//TODO define storage, scheduler
+	cluster, err := cluster.New(nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	eng.cluster = cluster
+	return eng, nil
 }

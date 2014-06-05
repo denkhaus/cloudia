@@ -2,17 +2,18 @@ package engine
 
 import (
 	"container/list"
-	//	"fmt"
+	"github.com/denkhaus/tcgl/applog"
+	"github.com/fsouza/go-dockerclient"
+	"github.com/tsuru/docker-cluster/cluster"
 	"os"
-	//	"strconv"
-	//	"text/tabwriter"
 )
 
 type Container struct {
-	id      string
-	elm     *list.Element //tree building in linked list
-	RawName string        `json:"name" yaml:"name"`
-	//RawDockerfile string        `json:"dockerfile" yaml:"dockerfile"`
+	id       string
+	elm      *list.Element
+	response *docker.Container
+
+	RawName      string   `json:"name" yaml:"name"`
 	RawImage     string   `json:"image" yaml:"image"`
 	Requirements []string `json:"required" yaml:"required"`
 	Run          RunParameters
@@ -28,16 +29,9 @@ func (container *Container) Name() string {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 ////
 /////////////////////////////////////////////////////////////////////////////////////////////////
-//func (container *Container) Dockerfile() string {
-//	return os.ExpandEnv(container.RawDockerfile)
-//}
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-////
-/////////////////////////////////////////////////////////////////////////////////////////////////
-//func (container *Container) Image() string {
-//	return os.ExpandEnv(container.RawImage)
-//}
+func (container *Container) Image() string {
+	return os.ExpandEnv(container.RawImage)
+}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 ////
@@ -190,119 +184,146 @@ func (container Container) runOrStart() error {
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
+// Create container
+/////////////////////////////////////////////////////////////////////////////////////////////////
+func (cnt Container) create(clst *cluster.Cluster) error {
+	config := docker.Config{}
+
+	applog.Infof("Creating container %s ... ", cnt.Name())
+
+	// CPU shares
+	if cnt.Run.CpuShares > 0 {
+		config.CpuSharesargs = strconv.Itoa(cnt.Run.CpuShares)
+	}
+	// Dns
+	for _, dns := range cnt.Run.Dns() {
+		config.Dns = append(config.Dns, dns)
+	}
+	// Env
+	for _, env := range cnt.Run.Env() {
+		config.Env = append(config.Env, env)
+	}
+	// Host
+	if len(cnt.Run.Hostname()) > 0 {
+		config.Hostname = container.Run.Hostname()
+	}
+	// Memory
+	if len(cnt.Run.Memory()) > 0 {
+		config.Memory = cnt.Run.Memory()
+	}
+	// User
+	if len(cnt.Run.User()) > 0 {
+		config.User = cnt.Run.User()
+	}
+	// Volumes
+	for _, volume := range cnt.Run.Volumes() {
+		config.Volumes = append(config.Volumes, volume)
+	}
+	// VolumesFrom
+	if len(cnt.Run.VolumesFrom()) > 0 {
+		config.VolumesFrom = cnt.Run.VolumesFrom()
+	}
+	// WorkingDir
+	if len(cnt.Run.WorkingDir()) > 0 {
+		config.WorkingDir = cnt.Run.WorkingDir()
+	}
+	// Image
+	if len(cnt.Image()) > 0 {
+		config.Image = cnt.Image()
+	}
+	// Command
+	for _, cmd := range cnt.Run.Cmd() {
+		config.Cmd = append(config.Cmd, cmd)
+	}
+
+	opts := docker.CreateContainerOptions{Config: &config}
+	opts.Name = container.Name()
+
+	id, newCont, err := clst.CreateContainer(opts, "TODO nodesnodes ...string")
+	if err != nil {
+		return err
+	}
+
+	cnt.id = id
+	cnt.response = newCont
+	return nil
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
 // Run container
 /////////////////////////////////////////////////////////////////////////////////////////////////
-func (container Container) run() error {
-	//	if container.exists() {
-	//		print.Notice("Container %s does already exist. Use --force to recreate.\n", container.Name())
-	//		if !container.running() {
-	//			container.start()
-	//		}
-	//	} else {
-	//		fmt.Printf("Running container %s ... ", container.Name())
-	//		// Assemble command arguments
-	//		args := []string{"run"}
-	//		// Cidfile
-	//		if len(container.Run.Cidfile()) > 0 {
-	//			args = append(args, "--cidfile", container.Run.Cidfile())
-	//		}
-	//		// CPU shares
-	//		if container.Run.CpuShares > 0 {
-	//			args = append(args, "--cpu-shares", strconv.Itoa(container.Run.CpuShares))
-	//		}
-	//		// Detach
-	//		if container.Run.Detach {
-	//			args = append(args, "--detach")
-	//		}
-	//		// Dns
-	//		for _, dns := range container.Run.Dns() {
-	//			args = append(args, "--dns", dns)
-	//		}
-	//		// Entrypoint
-	//		if len(container.Run.Entrypoint()) > 0 {
-	//			args = append(args, "--entrypoint", container.Run.Entrypoint())
-	//		}
-	//		// Env
-	//		for _, env := range container.Run.Env() {
-	//			args = append(args, "--env", env)
-	//		}
-	//		// Env file
-	//		if len(container.Run.EnvFile()) > 0 {
-	//			args = append(args, "--env-file", container.Run.EnvFile())
-	//		}
-	//		// Expose
-	//		for _, expose := range container.Run.Expose() {
-	//			args = append(args, "--expose", expose)
-	//		}
-	//		// Host
-	//		if len(container.Run.Hostname()) > 0 {
-	//			args = append(args, "--hostname", container.Run.Hostname())
-	//		}
-	//		// Interactive
-	//		if container.Run.Interactive {
-	//			args = append(args, "--interactive")
-	//		}
-	//		// Link
-	//		for _, link := range container.Run.Link() {
-	//			args = append(args, "--link", link)
-	//		}
-	//		// LxcConf
-	//		for _, lxcConf := range container.Run.LxcConf() {
-	//			args = append(args, "--lxc-conf", lxcConf)
-	//		}
-	//		// Memory
-	//		if len(container.Run.Memory()) > 0 {
-	//			args = append(args, "--memory", container.Run.Memory())
-	//		}
-	//		// Net
-	//		if container.Run.Net() != "bridge" {
-	//			args = append(args, "--net", container.Run.Net())
-	//		}
-	//		// Privileged
-	//		if container.Run.Privileged {
-	//			args = append(args, "--privileged")
-	//		}
-	//		// Publish
-	//		for _, port := range container.Run.Publish() {
-	//			args = append(args, "--publish", port)
-	//		}
-	//		// PublishAll
-	//		if container.Run.PublishAll {
-	//			args = append(args, "--publish-all")
-	//		}
-	//		// Rm
-	//		if container.Run.Rm {
-	//			args = append(args, "--rm")
-	//		}
-	//		// Tty
-	//		if container.Run.Tty {
-	//			args = append(args, "--tty")
-	//		}
-	//		// User
-	//		if len(container.Run.User()) > 0 {
-	//			args = append(args, "--user", container.Run.User())
-	//		}
-	//		// Volumes
-	//		for _, volume := range container.Run.Volume() {
-	//			args = append(args, "--volume", volume)
-	//		}
-	//		// VolumesFrom
-	//		for _, volumeFrom := range container.Run.VolumesFrom() {
-	//			args = append(args, "--volumes-from", volumeFrom)
-	//		}
-	//		// Workdir
-	//		if len(container.Run.Workdir()) > 0 {
-	//			args = append(args, "--workdir", container.Run.Workdir())
-	//		}
-	//		// Name
-	//		args = append(args, "--name", container.Name())
-	//		// Image
-	//		args = append(args, container.Image())
-	//		// Command
-	//		args = append(args, container.Run.Cmd()...)
-	//		// Execute command
-	//		executeCommand("docker", args)
-	//	}
+func (cnt Container) run(clst *cluster.Cluster) error {
+	if cnt.exists() {
+		applog.Infof("Container %s does already exist. Use --force to recreate.\n", cnt.Name())
+		if !cnt.running() {
+			cnt.Start()
+		}
+	} else {
+		cnt.create(clst)
+
+		//		if len(container.Run.Cidfile()) > 0 {
+		//			args = append(args, "--cidfile", container.Run.Cidfile())
+		//		}
+
+		//		// Detach
+		//		if container.Run.Detach {
+		//			args = append(args, "--detach")
+		//		}
+
+		//		// Entrypoint
+		//		if len(container.Run.Entrypoint()) > 0 {
+		//			args = append(args, "--entrypoint", container.Run.Entrypoint())
+		//		}
+
+		//		// Env file
+		//		if len(container.Run.EnvFile()) > 0 {
+		//			args = append(args, "--env-file", container.Run.EnvFile())
+		//		}
+		//		// Expose
+		//		for _, expose := range container.Run.Expose() {
+		//			args = append(args, "--expose", expose)
+		//		}
+
+		//		// Interactive
+		//		if container.Run.Interactive {
+		//			args = append(args, "--interactive")
+		//		}
+		//		// Link
+		//		for _, link := range container.Run.Link() {
+		//			args = append(args, "--link", link)
+		//		}
+		//		// LxcConf
+		//		for _, lxcConf := range container.Run.LxcConf() {
+		//			args = append(args, "--lxc-conf", lxcConf)
+		//		}
+
+		//		// Net
+		//		if container.Run.Net() != "bridge" {
+		//			args = append(args, "--net", container.Run.Net())
+		//		}
+
+		//		// Privileged
+		//		if container.Run.Privileged {
+		//			args = append(args, "--privileged")
+		//		}
+		//		// Publish
+		//		for _, port := range container.Run.Publish() {
+		//			args = append(args, "--publish", port)
+		//		}
+		//		// PublishAll
+		//		if container.Run.PublishAll {
+		//			args = append(args, "--publish-all")
+		//		}
+		//		// Rm
+		//		if container.Run.Rm {
+		//			args = append(args, "--rm")
+		//		}
+		//		// Tty
+		//		if container.Run.Tty {
+		//			args = append(args, "--tty")
+		//		}
+
+	}
 
 	return nil
 }
@@ -327,12 +348,14 @@ func (container Container) start() error {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Kill container
 /////////////////////////////////////////////////////////////////////////////////////////////////
-func (container Container) kill() error {
-	//if container.running() {
-	//	fmt.Printf("Killing container %s ... ", container.Name())
-	//	args := []string{"kill", container.Name()}
-	//	executeCommand("docker", args)
-	//}
+func (cnt Container) kill(clst *cluster.Cluster) error {
+	if cnt.running() {
+		applog.Infof("Attempt to kill container %s ... ", cnt.Name())
+		opts := docker.KillContainerOptions{ID: cnt.Id}
+		return clst.KillContainer(opts)
+	} else {
+		applog.Infof("Attempt to kill container %s not successfull. Container is not running", cnt.Name())
+	}
 
 	return nil
 }

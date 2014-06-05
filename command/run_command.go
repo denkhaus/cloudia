@@ -1,8 +1,8 @@
 package command
 
 import (
-	"errors"
 	"github.com/codegangsta/cli"
+	"github.com/denkhaus/cloudia/engine"
 )
 
 //run will call docker run on all containers, or the specified one(s).
@@ -11,12 +11,12 @@ func (c *Commander) NewRunCommand() {
 		Name:  "run",
 		Usage: "Run the containers",
 		Flags: []cli.Flag{
-			cli.BoolFlag{"force, f", false, "stop and remove running containers first"},
-			cli.BoolFlag{"kill, k", false, "when using --force, kill containers instead of stopping them"},
+			cli.BoolFlag{"force, f", "stop and remove running containers first"},
+			cli.BoolFlag{"kill, k", "when using --force, kill containers instead of stopping them"},
 		},
 		Action: func(ctx *cli.Context) {
-			c.Execute(func(containers Containers) {
-				return containers.run(c.Bool("force"), c.Bool("kill"))
+			c.Execute(func(containers engine.Containers) error {
+				return containers.Run(ctx.Bool("force"), ctx.Bool("kill"))
 			}, ctx)
 		},
 	})
