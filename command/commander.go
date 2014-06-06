@@ -3,10 +3,13 @@ package command
 import (
 	"github.com/codegangsta/cli"
 	"github.com/denkhaus/cloudia/engine"
+	"github.com/denkhaus/tcgl/applog"
+	"github.com/denkhaus/yamlconfig"
 )
 
 type Commander struct {
 	engine *engine.Engine
+	config *yamlconfig.Config
 	app    *cli.App
 }
 
@@ -19,21 +22,27 @@ func (c *Commander) Execute(fn engine.EngineFunc, ctx *cli.Context) {
 
 	err := c.engine.LoadFromFile(path, group)
 	if err != nil {
-		//TODO Handle Error
+		applog.Errorf("manifest error:: %s", err.Error())
+		return
 	}
 
-	err = c.engine.Execute(fn)
-	if err != nil {
-		//TODO Handle Error
+	if err = c.engine.Execute(fn); err != nil {
+		applog.Errorf("execution error:: %s", err.Error())
 	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func NewCommander(app *cli.App) (*Commander, error) {
-	cmd := &Commander{app: app}
-	if engine, err := engine.NewEngine(); err != nil {
+func NewCommander(app *cli.App, cnf *yamlconfig.Config) (*Commander, error) {
+	cmd := &Commander{app: app, config: cnf}
+
+	storPrefix := cnf.GetString("storage:prefix")
+	storAddress := cnf.GetString("storage:address")
+	storPassword := cnf.GetString("storage:password")
+
+	if engine, err := engine.NewEngine(
+		storeAddress, storPassword, storPrefix); err != nil {
 		cmd.engine = engine
 	} else {
 		return nil, err
