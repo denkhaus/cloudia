@@ -8,8 +8,8 @@ import (
 )
 
 var (
-	errRedisAddressNotSpecified = errors.New("config error:: Please specify redis storage address as <scheme>://<host>:<port>.")
-	errEmptyNodes               = errors.New("manifest error:: Please specify at least one node.")
+	errRedisAddressNotSpecified = errors.New("Config error:: Please specify redis storage address as <scheme>://<host>:<port>.")
+	errEmptyNodes               = errors.New("Manifest error:: Please specify at least one node.")
 )
 
 type Engine struct {
@@ -31,6 +31,27 @@ func (e *Engine) LoadFromFile(path, group string) error {
 		return err
 	}
 
+	return e.processManifest(man, group)
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+// LoadFromFile
+///////////////////////////////////////////////////////////////////////////////////////////////
+func (e *Engine) LoadDefaults(group string) error {
+	applog.Infof("Load default manifest.")
+
+	man, err := e.loader.LoadDefault()
+	if err != nil {
+		return err
+	}
+
+	return e.processManifest(man, group)
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+// LoadFromFile
+///////////////////////////////////////////////////////////////////////////////////////////////
+func (e *Engine) processManifest(man *Manifest, group string) error {
 	if len(man.Nodes) == 0 {
 		return errEmptyNodes
 	}
@@ -49,7 +70,7 @@ func (e *Engine) LoadFromFile(path, group string) error {
 func (e *Engine) Execute(fn EngineFunc) error {
 	err := e.nodes.ForAll(func(node Node) error {
 		if !node.HasContainers() {
-			return errors.New("node error:: No containers loaded")
+			return errors.New("Node error:: No containers loaded")
 		}
 		return fn(node)
 	})

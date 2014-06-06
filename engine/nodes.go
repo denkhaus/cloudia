@@ -21,7 +21,7 @@ func (n Nodes) String() string {
 	var ret string
 	ret = n.Aggregate(ret, func(node Node, val interface{}) interface{} {
 		ret := val.(string)
-		ret += fmt.Sprintf("%s\n", node)
+		ret += fmt.Sprintf("[%s]\n", node)
 		return ret
 	}).(string)
 
@@ -54,7 +54,7 @@ func (n Nodes) Aggregate(val interface{}, fn NodeAggregateFunc) interface{} {
 // Register
 /////////////////////////////////////////////////////////////////////////////////////////////////
 func (n Nodes) Initialize(e *Engine, man *Manifest, group string) error {
-	applog.Infof("Initialize nodes %s", n)
+	applog.Infof("Initialize node(s) %s", n)
 
 	names := man.GetContainerNamesByGroup(group)
 	if len(names) == 0 {

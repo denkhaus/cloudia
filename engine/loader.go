@@ -11,6 +11,10 @@ import (
 	"path/filepath"
 )
 
+var (
+	errNoManifestPathSpecified = errors.New("No manifest path provided. Please use [-m|--manifest] /path/to/manifest.")
+)
+
 type ManifestLoader struct {
 	data []byte
 }
@@ -73,6 +77,11 @@ func (m *ManifestLoader) unmarshalYAML() (*Manifest, error) {
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (m *ManifestLoader) LoadFromFile(filename string) (*Manifest, error) {
+
+	if len(filename) == 0 {
+		return nil, errNoManifestPathSpecified
+	}
+
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, err
@@ -113,5 +122,5 @@ func (m *ManifestLoader) LoadDefault() (*Manifest, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("no manifest found %v", defaultManifests)
+	return nil, fmt.Errorf("No manifest found %v", defaultManifests)
 }

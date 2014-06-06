@@ -25,7 +25,7 @@ type Node struct {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 func (n Node) ToMap() map[string]string {
 	mp := make(map[string]string)
-	mp["Address"] = n.Address
+	mp["address"] = n.Address
 	mp["ID"] = n.Id
 	return mp
 }
@@ -35,12 +35,12 @@ func (n Node) ToMap() map[string]string {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 func (n Node) String() string {
 
-	ret := fmt.Sprintf("id:%s, address:%s\n", n.Id, n.Address)
-	ret = n.Aggregate(ret, func(cont Container, val interface{}) interface{} {
-		ret := val.(string)
-		ret += fmt.Sprintf("%s, ", cont.Name())
-		return ret
-	}).(string)
+	ret := fmt.Sprintf("id:%s, address:%s", n.Id, n.Address)
+	//ret = n.Aggregate(ret, func(cont Container, val interface{}) interface{} {
+	//	ret := val.(string)
+	//	ret += fmt.Sprintf("%s, ", cont.Name())
+	//	return ret
+	//}).(string)
 	return ret
 }
 
@@ -48,11 +48,11 @@ func (n Node) String() string {
 // Initialize
 /////////////////////////////////////////////////////////////////////////////////////////////////
 func (n Node) Initialize(c *cluster.Cluster, cnts []Container) error {
-	applog.Infof("Node %s :: Apply container template", n)
+	applog.Infof("Apply container template -> [%s]", n)
 	if err := n.Apply(cnts); err != nil {
 		return err
 	}
-	applog.Infof("Node %s :: Register with cluster", n)
+	applog.Infof("Register with cluster -> [%s]", n)
 	if err := c.Register(n.ToMap()); err != nil {
 		return err
 	}

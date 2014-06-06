@@ -17,17 +17,25 @@ type Commander struct {
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (c *Commander) Execute(fn engine.EngineFunc, ctx *cli.Context) {
-	path := ctx.String("manifest")
-	group := ctx.String("group")
+	filePath := ctx.GlobalString("manifest")
+	group := ctx.GlobalString("group")
 
-	err := c.engine.LoadFromFile(path, group)
-	if err != nil {
-		applog.Errorf("manifest error:: %s", err.Error())
-		return
+	if len(filePath) > 0 {
+		err := c.engine.LoadFromFile(filePath, group)
+		if err != nil {
+			applog.Errorf(err.Error())
+			return
+		}
+	} else {
+		err := c.engine.LoadDefaults(group)
+		if err != nil {
+			applog.Errorf(err.Error())
+			return
+		}
 	}
 
-	if err = c.engine.Execute(fn); err != nil {
-		applog.Errorf("execution error:: %s", err.Error())
+	if err := c.engine.Execute(fn); err != nil {
+		applog.Errorf("Execution error:: %s", err.Error())
 	}
 }
 
@@ -43,9 +51,9 @@ func NewCommander(app *cli.App, cnf *yamlconfig.Config) (*Commander, error) {
 
 	if engine, err := engine.NewEngine(
 		storAddress, storPassword, storPrefix); err != nil {
-		cmd.engine = engine
-	} else {
 		return nil, err
+	} else {
+		cmd.engine = engine
 	}
 
 	cmd.NewLiftCommand()
