@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	errRedisAddressNotSpecified = errors.New("Config error:: Please specify redis storage address as <scheme>://<host>:<port>.")
+	errRedisAddressNotSpecified = errors.New("Storage error:: Please specify redis storage address as <scheme>://<host>:<port>.")
 	errEmptyNodes               = errors.New("Manifest error:: Please specify at least one node.")
 )
 

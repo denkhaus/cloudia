@@ -108,14 +108,17 @@ func (n Node) Apply(conts []Container) error {
 
 		// try to insert before nRequiredIdx and after nHasRequirementsIdx
 
+		if hasRequirementsIns != nil && requiredIns != nil &&
+			nRequiredIdx <= nHasRequirementsIdx {
+			return errCircularDependency
+		}
+
 		if hasRequirementsIns != nil && requiredIns == nil { // only has requirements
 			tree.TreeInsertAfter(cont, hasRequirementsIns)
 		} else if hasRequirementsIns == nil && requiredIns != nil { //only is required
 			tree.TreeInsertBefore(cont, requiredIns)
-		} else {
-			if nRequiredIdx <= nHasRequirementsIdx {
-				//
-			}
+		} else if nRequiredIdx > nHasRequirementsIdx {
+
 		}
 	}
 
