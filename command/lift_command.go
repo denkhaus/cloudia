@@ -16,8 +16,8 @@ func (c *Commander) NewLiftCommand() {
 			cli.BoolFlag{"kill, k", "kill containers"},
 		},
 		Action: func(ctx *cli.Context) {
-			c.Execute(func(containers engine.Containers) error {
-				return containers.Lift(ctx.Bool("force"), ctx.Bool("kill"))
+			c.Execute(func(node engine.Node) error {
+				return node.Lift(ctx.Bool("force"), ctx.Bool("kill"))
 			}, ctx)
 		},
 	})

@@ -184,8 +184,8 @@ func (n Node) ForAllReversed(fn ContainerFunc) error {
 // When forced, this will rebuild all images
 // and recreate all containers.
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (n Node) lift(force bool, kill bool) error {
-	if err := n.provision(force); err != nil {
+func (n Node) Lift(force bool, kill bool) error {
+	if err := n.Provision(force); err != nil {
 		return err
 	}
 	if err := n.runOrStart(force, kill); err != nil {
@@ -199,7 +199,7 @@ func (n Node) lift(force bool, kill bool) error {
 // Provision containers.
 // When forced, this will rebuild all images.
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (n Node) provision(force bool) error {
+func (n Node) Provision(force bool) error {
 	err := n.ForAll(func(cnt Container) error {
 		return cnt.provision(force)
 	})
@@ -210,9 +210,9 @@ func (n Node) provision(force bool) error {
 // Run containers.
 // When forced, removes existing containers first.
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (n Node) run(force bool, kill bool) error {
+func (n Node) Run(force bool, kill bool) error {
 	if force {
-		if err := n.remove(force, kill); err != nil {
+		if err := n.Remove(force, kill); err != nil {
 			return err
 		}
 	}
@@ -229,7 +229,7 @@ func (n Node) run(force bool, kill bool) error {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (n Node) runOrStart(force bool, kill bool) error {
 	if force {
-		if err := n.remove(force, kill); err != nil {
+		if err := n.Remove(force, kill); err != nil {
 			return err
 		}
 	}
@@ -242,7 +242,7 @@ func (n Node) runOrStart(force bool, kill bool) error {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 // Start containers.
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (n Node) start() error {
+func (n Node) Start() error {
 	err := n.ForAll(func(cont Container) error {
 		return cont.start()
 	})
@@ -252,7 +252,7 @@ func (n Node) start() error {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 // Kill containers.
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (n Node) kill() error {
+func (n Node) Kill() error {
 	err := n.ForAllReversed(func(cont Container) error {
 		return cont.kill()
 	})
@@ -262,7 +262,7 @@ func (n Node) kill() error {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 // Stop containers.
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (n Node) stop() error {
+func (n Node) Stop() error {
 	err := n.ForAllReversed(func(cnt Container) error {
 		return cnt.stop()
 	})
@@ -273,14 +273,14 @@ func (n Node) stop() error {
 // Remove containers.
 // When forced, stops existing containers first.
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (n Node) remove(force bool, kill bool) error {
+func (n Node) Remove(force bool, kill bool) error {
 	if force {
 		if kill {
-			if err := n.kill(); err != nil {
+			if err := n.Kill(); err != nil {
 				return err
 			}
 		} else {
-			if err := n.stop(); err != nil {
+			if err := n.Stop(); err != nil {
 				return err
 			}
 		}

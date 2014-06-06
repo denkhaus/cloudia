@@ -15,8 +15,8 @@ func (c *Commander) NewRemoveCommand() {
 			cli.BoolFlag{"kill, k", "when using --force, kill containers instead of stopping them"},
 		},
 		Action: func(ctx *cli.Context) {
-			c.Execute(func(containers engine.Containers) error {
-				return containers.Remove(ctx.Bool("force"), ctx.Bool("kill"))
+			c.Execute(func(node engine.Node) error {
+				return node.Remove(ctx.Bool("force"), ctx.Bool("kill"))
 			}, ctx)
 		},
 	})

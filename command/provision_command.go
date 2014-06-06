@@ -15,8 +15,8 @@ func (c *Commander) NewProvisionCommand() {
 			cli.BoolFlag{"force, f", "rebuild all images"},
 		},
 		Action: func(ctx *cli.Context) {
-			c.Execute(func(containers engine.Containers) error {
-				return containers.Provision(ctx.Bool("force"))
+			c.Execute(func(node engine.Node) error {
+				return node.Provision(ctx.Bool("force"))
 			}, ctx)
 		},
 	})

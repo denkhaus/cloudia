@@ -11,8 +11,8 @@ func (c *Commander) NewKillCommand() {
 		Name:  "kill",
 		Usage: "Kill the containers",
 		Action: func(ctx *cli.Context) {
-			c.Execute(func(containers engine.Containers) error {
-				return containers.Kill()
+			c.Execute(func(node engine.Node) error {
+				return node.Kill()
 			}, ctx)
 		},
 	})

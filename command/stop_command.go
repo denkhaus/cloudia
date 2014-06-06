@@ -11,8 +11,8 @@ func (c *Commander) NewStopCommand() {
 		Name:  "stop",
 		Usage: "Stop the containers",
 		Action: func(ctx *cli.Context) {
-			c.Execute(func(containers engine.Containers) error {
-				return containers.Stop()
+			c.Execute(func(node engine.Node) error {
+				return node.Stop()
 			}, ctx)
 		},
 	})

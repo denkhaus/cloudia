@@ -42,7 +42,7 @@ func NewCommander(app *cli.App, cnf *yamlconfig.Config) (*Commander, error) {
 	storPassword := cnf.GetString("storage:password")
 
 	if engine, err := engine.NewEngine(
-		storeAddress, storPassword, storPrefix); err != nil {
+		storAddress, storPassword, storPrefix); err != nil {
 		cmd.engine = engine
 	} else {
 		return nil, err

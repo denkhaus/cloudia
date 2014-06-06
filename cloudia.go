@@ -23,6 +23,7 @@ func main() {
 		//	cli.StringSliceFlag{"peers, C", &cli.StringSlice{}, "a comma-delimited list of machine addresses in the cluster (default: {\"127.0.0.1:4001\"})"},
 	}
 
+
 	cnf := yamlconfig.NewConfig(".cldiarc")
 	if err := cnf.Load(func(config *yamlconfig.Config) {
 		config.SetDefault("storage:address", "http://127.0.0.1:6379")
@@ -32,7 +33,7 @@ func main() {
 		applog.Errorf("config error:: load config %s", err.Error()))
 		return
 	}
-
+	
 	cmdr, err := command.NewCommander(app, cnf)
 	if err != nil {
 		applog.Errorf("startup error:: %s", err.Error()))		
