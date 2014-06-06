@@ -29,14 +29,12 @@ func containerInGroup(container Container, names []string) bool {
 // GetContainersByNames
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (m *Manifest) GetContainersByNames(names []string) []Container {
-	cont := m.Containers
 	var filtered []Container
-	cont.ForAll(func(cnt Container) error {
+	for _, cnt := range m.Containers {
 		if containerInGroup(cnt, names) {
 			filtered = append(filtered, cnt)
 		}
-		return nil
-	})
+	}
 
 	return filtered
 }
@@ -45,14 +43,12 @@ func (m *Manifest) GetContainersByNames(names []string) []Container {
 //GetContainerNamesByGroup
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (m *Manifest) GetContainerNamesByGroup(group string) []string {
-	cont := m.Containers
 	// If group is not given, all containers
 	if len(group) == 0 {
 		var names []string
-		cont.ForAll(func(cnt Container) error {
+		for _, cnt := range m.Containers {
 			names = append(names, cnt.Name())
-			return nil
-		})
+		}
 		return names
 	}
 	// Select specified group from listed groups
@@ -63,12 +59,11 @@ func (m *Manifest) GetContainerNamesByGroup(group string) []string {
 	}
 	// The group might just be a container reference itself
 	var names []string
-	cont.ForAll(func(cnt Container) error {
+	for _, cnt := range m.Containers {
 		if cnt.Name() == group {
 			names = append(names, group)
 		}
-		return nil
-	})
+	}
 
 	return names
 }

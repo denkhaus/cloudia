@@ -18,13 +18,13 @@ type Engine struct {
 	cluster *cluster.Cluster
 }
 
-type EngineFunc func(cont Containers) error
+type EngineFunc func(cont Node) error
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 // LoadFromFile
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (e *Engine) LoadFromFile(path, group string) error {
-	applog.Infof("Load manifest frome file %s", path)
+	applog.Infof("Load manifest from file %s", path)
 
 	man, err := e.loader.LoadFromFile(path)
 	if err != nil {
@@ -35,8 +35,8 @@ func (e *Engine) LoadFromFile(path, group string) error {
 		return errEmptyNodes
 	}
 
-	e.Nodes = man.Nodes
-	if err := e.Nodes.Initialize(e, man, group); err != nil {
+	e.nodes = man.Nodes
+	if err := e.nodes.Initialize(e, man, group); err != nil {
 		return err
 	}
 
@@ -47,11 +47,13 @@ func (e *Engine) LoadFromFile(path, group string) error {
 // Execute
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (e *Engine) Execute(fn EngineFunc) error {
-	if e.containers.IsEmpty() {
-		return errors.New("no containers loaded")
-	}
-
-	return fn(e.containers)
+	err := e.nodes.ForAll(func(node Node) error {
+		if !node.HasContainers() {
+			return errors.New("node error:: No containers loaded")
+		}
+		return fn(node)
+	})
+	return err
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////

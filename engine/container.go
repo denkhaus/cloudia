@@ -4,7 +4,6 @@ import (
 	"container/list"
 	"github.com/denkhaus/tcgl/applog"
 	"github.com/fsouza/go-dockerclient"
-	"github.com/tsuru/docker-cluster/cluster"
 	"os"
 	"strconv"
 )
@@ -12,6 +11,7 @@ import (
 type Container struct {
 	id       string
 	elm      *list.Element
+	node     *Node
 	response *docker.Container
 
 	RawName      string   `json:"name" yaml:"name"`
@@ -58,7 +58,7 @@ func (container *Container) Image() string {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 ////
 /////////////////////////////////////////////////////////////////////////////////////////////////
-func (container *Container) exists(clst *cluster.Cluster) bool {
+func (cnt *Container) exists() bool {
 	//	// `ps -a` returns all existant containers
 	//	id, err := container.Id()
 	//	if err != nil || len(id) == 0 {
@@ -83,25 +83,27 @@ func (container *Container) exists(clst *cluster.Cluster) bool {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 ////
 /////////////////////////////////////////////////////////////////////////////////////////////////
-//func (container *Container) running() bool {
-//	// `ps` returns all running containers
-//	id, err := container.Id()
-//	if err != nil || len(id) == 0 {
-//		return false
-//	}
-//	dockerCmd := []string{"docker", "ps", "--quiet", "--no-trunc"}
-//	grepCmd := []string{"grep", "-wF", id}
-//	output, err := pipedCommandOutput(dockerCmd, grepCmd)
-//	if err != nil {
-//		return false
-//	}
-//	result := string(output)
-//	if len(result) > 0 {
-//		return true
-//	} else {
-//		return false
-//	}
-//}
+func (cnt *Container) running() bool {
+	//	// `ps` returns all running containers
+	//	id, err := container.Id()
+	//	if err != nil || len(id) == 0 {
+	//		return false
+	//	}
+	//	dockerCmd := []string{"docker", "ps", "--quiet", "--no-trunc"}
+	//	grepCmd := []string{"grep", "-wF", id}
+	//	output, err := pipedCommandOutput(dockerCmd, grepCmd)
+	//	if err != nil {
+	//		return false
+	//	}
+	//	result := string(output)
+	//	if len(result) > 0 {
+	//		return true
+	//	} else {
+	//		return false
+	//	}
+
+	return false
+}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 ////
@@ -124,7 +126,7 @@ func (container *Container) exists(clst *cluster.Cluster) bool {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 ////
 /////////////////////////////////////////////////////////////////////////////////////////////////
-func (container *Container) status() error {
+func (cnt *Container) status() error {
 	//w * tabwriter.Writer
 	//	args := []string{"inspect", "--format={{.State.Running}}\t{{.ID}}\t{{if .NetworkSettings.IPAddress}}{{.NetworkSettings.IPAddress}}{{else}}-{{end}}\t{{range $k,$v := $.NetworkSettings.Ports}}{{$k}},{{end}}", container.Name()}
 	//	output, err := commandOutput("docker", args)
@@ -159,11 +161,11 @@ func (container *Container) status() error {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 ////
 /////////////////////////////////////////////////////////////////////////////////////////////////
-func (container Container) Provision(clst *cluster.Cluster, force bool) error {
-	if force || !container.exists(clst) {
-		container.create(clst)
+func (cnt *Container) provision(force bool) error {
+	if force || !cnt.exists() {
+		cnt.create()
 	} else {
-		applog.Infof("Container %s does already exist. Use --force to recreate.\n", container.Image())
+		applog.Infof("Container %s does already exist. Use --force to recreate.\n", cnt.Image())
 	}
 
 	return nil
@@ -172,18 +174,18 @@ func (container Container) Provision(clst *cluster.Cluster, force bool) error {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Run or start container
 /////////////////////////////////////////////////////////////////////////////////////////////////
-func (container Container) runOrStart(clst *cluster.Cluster) error {
-	if container.exists(clst) {
-		return container.start(clst)
+func (cnt Container) runOrStart() error {
+	if cnt.exists() {
+		return cnt.start()
 	} else {
-		return container.run(clst)
+		return cnt.run()
 	}
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Create container
 /////////////////////////////////////////////////////////////////////////////////////////////////
-func (cnt Container) create(clst *cluster.Cluster) error {
+func (cnt Container) create() error {
 	config := docker.Config{}
 
 	applog.Infof("Creating container %s ... ", cnt.Name())
@@ -209,7 +211,7 @@ func (cnt Container) create(clst *cluster.Cluster) error {
 		if mem, err := strconv.ParseInt(cnt.Run.Memory(), 10, 64); err == nil {
 			config.Memory = mem
 		} else {
-			applog.Errorf("Unable to convert memory param to int64 %v", err)
+			applog.Errorf("run parameters error:: Unable to convert memory param to int64 %v", err)
 		}
 
 	}
@@ -217,10 +219,12 @@ func (cnt Container) create(clst *cluster.Cluster) error {
 	if len(cnt.Run.User()) > 0 {
 		config.User = cnt.Run.User()
 	}
-	// Volumes
-	for _, volume := range cnt.Run.Volumes() {
-		config.Volumes = append(config.Volumes, volume)
-	}
+
+	// TODO Volumes
+	//for _, volume := range cnt.Run.Volumes() {
+	//	config.Volumes = append(config.Volumes, volume)
+	//}
+
 	// VolumesFrom
 	if len(cnt.Run.VolumesFrom()) > 0 {
 		config.VolumesFrom = cnt.Run.VolumesFrom()
@@ -234,10 +238,15 @@ func (cnt Container) create(clst *cluster.Cluster) error {
 		config.Image = cnt.Image()
 	}
 	// Command
-	for _, cmd := range cnt.Run.Cmd() {
-		config.Cmd = append(config.Cmd, cmd)
+	if cmds, err := cnt.Run.Cmd(); err != nil {
+		for _, cmd := range cmds {
+			config.Cmd = append(config.Cmd, cmd)
+		}
+	} else {
+		applog.Errorf("run parameters error:: Errror while parsing cmd:: %v", err)
 	}
 
+	clst := cnt.node.engine.cluster
 	opts := docker.CreateContainerOptions{Config: &config, Name: cnt.Name()}
 	id, newCont, err := clst.CreateContainer(opts, "TODO nodesnodes ...string")
 	if err != nil {
@@ -252,14 +261,14 @@ func (cnt Container) create(clst *cluster.Cluster) error {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Run container
 /////////////////////////////////////////////////////////////////////////////////////////////////
-func (cnt Container) run(clst *cluster.Cluster) error {
-	if cnt.exists(clst) {
+func (cnt Container) run() error {
+	if cnt.exists() {
 		applog.Infof("Container %s does already exist. Use --force to recreate.\n", cnt.Name())
-		if !cnt.running(clst) {
-			cnt.start(clst)
+		if !cnt.running() {
+			cnt.start()
 		}
 	} else {
-		cnt.create(clst)
+		cnt.create()
 
 		//		if len(container.Run.Cidfile()) > 0 {
 		//			args = append(args, "--cidfile", container.Run.Cidfile())
@@ -332,7 +341,7 @@ func (cnt Container) run(clst *cluster.Cluster) error {
 // Start container
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-func (container Container) start(clst *cluster.Cluster) error {
+func (cnt Container) start() error {
 	//	if container.exists() {
 	//		if !container.running() {
 	//			fmt.Printf("Starting container %s ... ", container.Name())
@@ -348,10 +357,11 @@ func (container Container) start(clst *cluster.Cluster) error {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Kill container
 /////////////////////////////////////////////////////////////////////////////////////////////////
-func (cnt Container) kill(clst *cluster.Cluster) error {
+func (cnt Container) kill() error {
 	if cnt.running() {
 		applog.Infof("Attempt to kill container %s ... ", cnt.Name())
-		opts := docker.KillContainerOptions{ID: cnt.Id}
+		opts := docker.KillContainerOptions{ID: cnt.id}
+		clst := cnt.node.engine.cluster
 		return clst.KillContainer(opts)
 	} else {
 		applog.Infof("Attempt to kill container %s not successfull. Container is not running", cnt.Name())
@@ -376,7 +386,7 @@ func (container Container) stop() error {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 //Remove container
 /////////////////////////////////////////////////////////////////////////////////////////////////
-func (container Container) rm() error {
+func (container Container) remove() error {
 	//	if container.exists() {
 	//		if container.running() {
 	//			print.Error("Container %s is running and cannot be removed.\n", container.Name())

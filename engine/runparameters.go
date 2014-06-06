@@ -158,7 +158,7 @@ func (r *RunParameters) User() string {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (r *RunParameters) Volumes() []string {
 	var volumes []string
-	for _, rawVolume := range r.RawVolume {
+	for _, rawVolume := range r.RawVolumes {
 		paths := strings.Split(rawVolume, ":")
 		volumes = append(volumes, os.ExpandEnv(strings.Join(paths, ":")))
 	}
@@ -199,6 +199,5 @@ func (r *RunParameters) Cmd() ([]string, error) {
 		}
 	}
 
-	//TODO more verbose error notification
 	return nil, errors.New("cmd is of unknown type!")
 }
