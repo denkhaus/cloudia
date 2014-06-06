@@ -3,7 +3,6 @@ package engine
 import (
 	"errors"
 	"os"
-	"path"
 	"strings"
 )
 
@@ -176,7 +175,7 @@ func (r *RunParameters) VolumesFrom() string {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (r *RunParameters) Workdir() string {
+func (r *RunParameters) WorkingDir() string {
 	return os.ExpandEnv(r.RawWorkdir)
 }
 

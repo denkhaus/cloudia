@@ -6,6 +6,7 @@ import (
 	"github.com/fsouza/go-dockerclient"
 	"github.com/tsuru/docker-cluster/cluster"
 	"os"
+	"strconv"
 )
 
 type Container struct {
@@ -57,7 +58,7 @@ func (container *Container) Image() string {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 ////
 /////////////////////////////////////////////////////////////////////////////////////////////////
-func (container *Container) exists() bool {
+func (container *Container) exists(clst *cluster.Cluster) bool {
 	//	// `ps -a` returns all existant containers
 	//	id, err := container.Id()
 	//	if err != nil || len(id) == 0 {
@@ -158,16 +159,12 @@ func (container *Container) status() error {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 ////
 /////////////////////////////////////////////////////////////////////////////////////////////////
-func (container Container) provision(force bool) error {
-	//	if force || !container.imageExists() {
-	//		if len(container.Dockerfile()) > 0 {
-	//			container.buildImage()
-	//		} else {
-	//			container.pullImage()
-	//		}
-	//	} else {
-	//		print.Notice("Image %s does already exist. Use --force to recreate.\n", container.Image())
-	//	}
+func (container Container) Provision(clst *cluster.Cluster, force bool) error {
+	if force || !container.exists(clst) {
+		container.create(clst)
+	} else {
+		applog.Infof("Container %s does already exist. Use --force to recreate.\n", container.Image())
+	}
 
 	return nil
 }
@@ -175,11 +172,11 @@ func (container Container) provision(force bool) error {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Run or start container
 /////////////////////////////////////////////////////////////////////////////////////////////////
-func (container Container) runOrStart() error {
-	if container.exists() {
-		return container.start()
+func (container Container) runOrStart(clst *cluster.Cluster) error {
+	if container.exists(clst) {
+		return container.start(clst)
 	} else {
-		return container.run()
+		return container.run(clst)
 	}
 }
 
@@ -193,7 +190,7 @@ func (cnt Container) create(clst *cluster.Cluster) error {
 
 	// CPU shares
 	if cnt.Run.CpuShares > 0 {
-		config.CpuSharesargs = strconv.Itoa(cnt.Run.CpuShares)
+		config.CpuShares = int64(cnt.Run.CpuShares)
 	}
 	// Dns
 	for _, dns := range cnt.Run.Dns() {
@@ -205,11 +202,16 @@ func (cnt Container) create(clst *cluster.Cluster) error {
 	}
 	// Host
 	if len(cnt.Run.Hostname()) > 0 {
-		config.Hostname = container.Run.Hostname()
+		config.Hostname = cnt.Run.Hostname()
 	}
 	// Memory
 	if len(cnt.Run.Memory()) > 0 {
-		config.Memory = cnt.Run.Memory()
+		if mem, err := strconv.ParseInt(cnt.Run.Memory(), 10, 64); err == nil {
+			config.Memory = mem
+		} else {
+			applog.Errorf("Unable to convert memory param to int64 %v", err)
+		}
+
 	}
 	// User
 	if len(cnt.Run.User()) > 0 {
@@ -236,9 +238,7 @@ func (cnt Container) create(clst *cluster.Cluster) error {
 		config.Cmd = append(config.Cmd, cmd)
 	}
 
-	opts := docker.CreateContainerOptions{Config: &config}
-	opts.Name = container.Name()
-
+	opts := docker.CreateContainerOptions{Config: &config, Name: cnt.Name()}
 	id, newCont, err := clst.CreateContainer(opts, "TODO nodesnodes ...string")
 	if err != nil {
 		return err
@@ -253,10 +253,10 @@ func (cnt Container) create(clst *cluster.Cluster) error {
 // Run container
 /////////////////////////////////////////////////////////////////////////////////////////////////
 func (cnt Container) run(clst *cluster.Cluster) error {
-	if cnt.exists() {
+	if cnt.exists(clst) {
 		applog.Infof("Container %s does already exist. Use --force to recreate.\n", cnt.Name())
-		if !cnt.running() {
-			cnt.Start()
+		if !cnt.running(clst) {
+			cnt.start(clst)
 		}
 	} else {
 		cnt.create(clst)
@@ -332,7 +332,7 @@ func (cnt Container) run(clst *cluster.Cluster) error {
 // Start container
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-func (container Container) start() error {
+func (container Container) start(clst *cluster.Cluster) error {
 	//	if container.exists() {
 	//		if !container.running() {
 	//			fmt.Printf("Starting container %s ... ", container.Name())
