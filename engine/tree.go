@@ -6,7 +6,7 @@ import (
 
 type Tree struct {
 	unmet map[string]interface{}
-	list.List
+	list  *list.List
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -14,7 +14,7 @@ type Tree struct {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (t *Tree) GetIndex(cont interface{}) int {
 	nIndex := 0
-	for e := t.Front(); e != nil; e = e.Next() {
+	for e := t.list.Front(); e != nil; e = e.Next() {
 		if e.Value == cont {
 			return nIndex
 		}
@@ -28,9 +28,9 @@ func (t *Tree) GetIndex(cont interface{}) int {
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (t *Tree) GetContainerByName(name string) interface{} {
-	for e := t.Front(); e != nil; e = e.Next() {
+	for e := t.list.Front(); e != nil; e = e.Next() {
 		cont := e.Value.(Container)
-		if cont.Name() == name {
+		if cont.name == name {
 			return cont
 		}
 	}
@@ -42,8 +42,8 @@ func (t *Tree) GetContainerByName(name string) interface{} {
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (t *Tree) TreePushBack(cont Container) *list.Element {
-	elm := t.PushBack(cont)
-	t.RemoveUnmetRequirement(cont.Name())
+	elm := t.list.PushBack(cont)
+	t.RemoveUnmetRequirement(cont.name)
 	return elm
 }
 
@@ -51,8 +51,8 @@ func (t *Tree) TreePushBack(cont Container) *list.Element {
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (t *Tree) TreeInsertBefore(cont Container, elm *list.Element) *list.Element {
-	newElm := t.InsertBefore(cont, elm)
-	t.RemoveUnmetRequirement(cont.Name())
+	newElm := t.list.InsertBefore(cont, elm)
+	t.RemoveUnmetRequirement(cont.name)
 	return newElm
 }
 
@@ -60,8 +60,8 @@ func (t *Tree) TreeInsertBefore(cont Container, elm *list.Element) *list.Element
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (t *Tree) TreeInsertAfter(cont Container, elm *list.Element) *list.Element {
-	newElm := t.InsertAfter(cont, elm)
-	t.RemoveUnmetRequirement(cont.Name())
+	newElm := t.list.InsertAfter(cont, elm)
+	t.RemoveUnmetRequirement(cont.name)
 	return newElm
 }
 
@@ -86,7 +86,29 @@ func (t *Tree) AddUnmetRequirement(name string) {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
+func (t *Tree) First() *list.Element {
+	return t.list.Front()
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
+func (t *Tree) Last() *list.Element {
+	return t.list.Back()
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
+func (t *Tree) Length() int {
+	return t.list.Len()
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
 func NewTree() *Tree {
-	tree := &Tree{}
+	tree := &Tree{list: list.New()}
+	tree.unmet = make(map[string]interface{})
 	return tree
 }

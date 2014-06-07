@@ -2,6 +2,7 @@ package engine
 
 import (
 	"errors"
+	//"fmt"
 	"github.com/denkhaus/tcgl/applog"
 	"github.com/tsuru/docker-cluster/cluster"
 	"github.com/tsuru/docker-cluster/storage"
@@ -10,15 +11,42 @@ import (
 var (
 	errRedisAddressNotSpecified = errors.New("Storage error:: Please specify redis storage address as <scheme>://<host>:<port>.")
 	errEmptyNodes               = errors.New("Manifest error:: Please specify at least one node.")
+	errEmptyContainerNames      = errors.New("Group error:: No containers available by provided group.")
 )
 
 type Engine struct {
-	loader  ManifestLoader
-	nodes   Nodes
+	nodes   []Node
 	cluster *cluster.Cluster
 }
 
 type EngineFunc func(cont Node) error
+
+//type NodeAggregateFunc func(node Node, val interface{}) interface{}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
+//func (n Nodes) Aggregate(val interface{}, fn NodeAggregateFunc) interface{} {
+
+//	for _, node := range n {
+//		val = fn(node, val)
+//	}
+//	return val
+//}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+// String
+/////////////////////////////////////////////////////////////////////////////////////////////////
+//func (n Nodes) String() string {
+//	var ret string
+//	ret = n.Aggregate(ret, func(node Node, val interface{}) interface{} {
+//		res := val.(string)
+//		res += fmt.Sprintf("[%s]\n", node)
+//		return res
+//	}).(string)
+
+//	return ret
+//}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 // LoadFromFile
@@ -26,7 +54,8 @@ type EngineFunc func(cont Node) error
 func (e *Engine) LoadFromFile(path, group string) error {
 	applog.Infof("Load manifest from file %s", path)
 
-	man, err := e.loader.LoadFromFile(path)
+	ld := ManifestLoader{}
+	man, err := ld.LoadFromFile(path)
 	if err != nil {
 		return err
 	}
@@ -40,7 +69,8 @@ func (e *Engine) LoadFromFile(path, group string) error {
 func (e *Engine) LoadDefaults(group string) error {
 	applog.Infof("Load default manifest.")
 
-	man, err := e.loader.LoadDefault()
+	ld := ManifestLoader{}
+	man, err := ld.LoadDefault()
 	if err != nil {
 		return err
 	}
@@ -49,26 +79,63 @@ func (e *Engine) LoadDefaults(group string) error {
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
-// LoadFromFile
+// processManifest
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (e *Engine) processManifest(man *Manifest, group string) error {
 	if len(man.Nodes) == 0 {
 		return errEmptyNodes
 	}
 
-	e.nodes = man.Nodes
-	if err := e.nodes.Initialize(e, man, group); err != nil {
-		return err
+	names := man.GetTemplateNamesByGroup(group)
+	if len(names) == 0 {
+		return errEmptyContainerNames
+	}
+
+	tmps := man.GetTemplatesByNames(names)
+	for _, cn := range man.Nodes {
+		node, err := NewNode(cn.Id, cn.Address, e, tmps)
+		if err != nil {
+			return err
+		}
+		e.nodes = append(e.nodes, *node)
 	}
 
 	return nil
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
+func (e *Engine) ForAllNodes(fn EngineFunc) error {
+	for _, node := range e.nodes {
+		if err := fn(node); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+// Register
+/////////////////////////////////////////////////////////////////////////////////////////////////
+//func (n Nodes) Initialize(e *Engine, man *Manifest, group string) error {
+//	//applog.Infof("Initialize node(s) %s", n)
+
+//	for _, node := range n {
+//		if err := node.Initialize(e.cluster, cnts); err != nil {
+//			return err
+//		}
+//	}
+
+//	//applog.Infof("Apply group --> %s process containers --> %s", group, e.containers)
+//	return nil
+//}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
 // Execute
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (e *Engine) Execute(fn EngineFunc) error {
-	err := e.nodes.ForAll(func(node Node) error {
+	err := e.ForAllNodes(func(node Node) error {
 		if !node.HasContainers() {
 			return errors.New("Node error:: No containers loaded")
 		}
@@ -81,7 +148,7 @@ func (e *Engine) Execute(fn EngineFunc) error {
 // NewEngine
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func NewEngine(storageAddress, storagePassword, storagePrefix string) (*Engine, error) {
-	eng := &Engine{loader: ManifestLoader{}}
+	eng := &Engine{}
 
 	applog.Debugf("Create cluster store")
 	if len(storageAddress) == 0 {

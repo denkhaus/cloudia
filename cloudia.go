@@ -16,7 +16,6 @@ func main() {
 	app.Version = releaseVersion
 	app.Usage = "A command line client for Cloudia - easy clusterwise docker orchestration."
 	app.Flags = []cli.Flag{
-		//cli.BoolFlag{"verbose, v", "displays more verbose output"},
 		cli.StringFlag{"group, g", "", "group or container to restrict the command to"},
 		cli.StringFlag{"manifest, m", "", "path to a manifest (.json, .yml, .yaml) file to read from"},
 

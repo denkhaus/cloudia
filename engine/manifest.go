@@ -7,18 +7,50 @@ import (
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
-type Manifest struct {
-	Containers []Container         `json:"containers" yaml:"containers"`
-	Groups     map[string][]string `json:"groups" yaml:"groups"`
-	Nodes      Nodes               `json:"nodes" yaml:"nodes"`
+type Template struct {
+	RawName      string   `json:"name" yaml:"name"`
+	RawImage     string   `json:"image" yaml:"image"`
+	Requirements []string `json:"required" yaml:"required"`
+	Run          RunParameters
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+////
+/////////////////////////////////////////////////////////////////////////////////////////////////
+func (tmp *Template) Name() string {
+	return os.ExpandEnv(tmp.RawName)
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+////
+/////////////////////////////////////////////////////////////////////////////////////////////////
+func (tmp *Template) Image() string {
+	return os.ExpandEnv(tmp.RawImage)
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+////
+/////////////////////////////////////////////////////////////////////////////////////////////////
+type ClusterNode struct {
+	Id      string `json:"id" yaml:"id"`
+	Address string `json:"address" yaml:"address"`
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
-// containerInGroup
+//
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func containerInGroup(container Container, names []string) bool {
+type Manifest struct {
+	Templates []Template          `json:"containers" yaml:"containers"`
+	Groups    map[string][]string `json:"groups" yaml:"groups"`
+	Nodes     []ClusterNode       `json:"nodes" yaml:"nodes"`
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+// templateInGroup
+///////////////////////////////////////////////////////////////////////////////////////////////
+func templateInGroup(tmp Template, names []string) bool {
 	for _, name := range names {
-		if os.ExpandEnv(name) == container.Name() {
+		if os.ExpandEnv(name) == tmp.Name() {
 			return true
 		}
 	}
@@ -28,10 +60,10 @@ func containerInGroup(container Container, names []string) bool {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 // GetContainersByNames
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (m *Manifest) GetContainersByNames(names []string) []Container {
-	var filtered []Container
-	for _, cnt := range m.Containers {
-		if containerInGroup(cnt, names) {
+func (m *Manifest) GetTemplatesByNames(names []string) []Template {
+	var filtered []Template
+	for _, cnt := range m.Templates {
+		if templateInGroup(cnt, names) {
 			filtered = append(filtered, cnt)
 		}
 	}
@@ -42,12 +74,12 @@ func (m *Manifest) GetContainersByNames(names []string) []Container {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //GetContainerNamesByGroup
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (m *Manifest) GetContainerNamesByGroup(group string) []string {
+func (m *Manifest) GetTemplateNamesByGroup(group string) []string {
 	// If group is not given, all containers
 	if len(group) == 0 {
 		var names []string
-		for _, cnt := range m.Containers {
-			names = append(names, cnt.Name())
+		for _, tmp := range m.Templates {
+			names = append(names, tmp.Name())
 		}
 		return names
 	}
@@ -59,8 +91,8 @@ func (m *Manifest) GetContainerNamesByGroup(group string) []string {
 	}
 	// The group might just be a container reference itself
 	var names []string
-	for _, cnt := range m.Containers {
-		if cnt.Name() == group {
+	for _, tmp := range m.Templates {
+		if tmp.Name() == group {
 			names = append(names, group)
 		}
 	}

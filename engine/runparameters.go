@@ -2,7 +2,10 @@ package engine
 
 import (
 	"errors"
+	"fmt"
+	"github.com/fsouza/go-dockerclient"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -200,4 +203,137 @@ func (r *RunParameters) Cmd() ([]string, error) {
 	}
 
 	return nil, errors.New("cmd is of unknown type!")
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
+func (r *RunParameters) CreateDockerConfig() (*docker.HostConfig, error) {
+	config := &docker.HostConfig{}
+	//		if len(container.Run.Cidfile()) > 0 {
+	//			args = append(args, "--cidfile", container.Run.Cidfile())
+	//		}
+
+	//		// Detach
+	//		if container.Run.Detach {
+	//			args = append(args, "--detach")
+	//		}
+
+	//		// Entrypoint
+	//		if len(container.Run.Entrypoint()) > 0 {
+	//			args = append(args, "--entrypoint", container.Run.Entrypoint())
+	//		}
+
+	//		// Env file
+	//		if len(container.Run.EnvFile()) > 0 {
+	//			args = append(args, "--env-file", container.Run.EnvFile())
+	//		}
+	//		// Expose
+	//		for _, expose := range container.Run.Expose() {
+	//			args = append(args, "--expose", expose)
+	//		}
+
+	//		// Interactive
+	//		if container.Run.Interactive {
+	//			args = append(args, "--interactive")
+	//		}
+	//		// Link
+	//		for _, link := range container.Run.Link() {
+	//			args = append(args, "--link", link)
+	//		}
+	//		// LxcConf
+	//		for _, lxcConf := range container.Run.LxcConf() {
+	//			args = append(args, "--lxc-conf", lxcConf)
+	//		}
+
+	//		// Net
+	//		if container.Run.Net() != "bridge" {
+	//			args = append(args, "--net", container.Run.Net())
+	//		}
+
+	//		// Privileged
+	//		if container.Run.Privileged {
+	//			args = append(args, "--privileged")
+	//		}
+	//		// Publish
+	//		for _, port := range container.Run.Publish() {
+	//			args = append(args, "--publish", port)
+	//		}
+	//		// PublishAll
+	//		if container.Run.PublishAll {
+	//			args = append(args, "--publish-all")
+	//		}
+	//		// Rm
+	//		if container.Run.Rm {
+	//			args = append(args, "--rm")
+	//		}
+	//		// Tty
+	//		if container.Run.Tty {
+	//			args = append(args, "--tty")
+	//		}
+
+	return config
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
+func (r *RunParameters) CreateDockerConfig() (*docker.Config, error) {
+
+	config := &docker.Config{}
+
+	// CPU shares
+	if r.CpuShares > 0 {
+		config.CpuShares = int64(r.CpuShares)
+	}
+	// Dns
+	for _, dns := range r.Dns() {
+		config.Dns = append(config.Dns, dns)
+	}
+	// Env
+	for _, env := range r.Env() {
+		config.Env = append(config.Env, env)
+	}
+	// Host
+	if len(r.Hostname()) > 0 {
+		config.Hostname = r.Hostname()
+	}
+	// Memory
+	if len(r.Memory()) > 0 {
+		if mem, err := strconv.ParseInt(r.Memory(), 10, 64); err == nil {
+			config.Memory = mem
+		} else {
+			return nil, fmt.Errorf("Run parameters error:: Unable to convert memory param to int64 %v", err)
+		}
+
+	}
+	// User
+	if len(r.User()) > 0 {
+		config.User = r.User()
+	}
+
+	// TODO Volumes
+	//for _, volume := range cnt.Run.Volumes() {
+	//	config.Volumes = append(config.Volumes, volume)
+	//}
+
+	// VolumesFrom
+	if len(r.VolumesFrom()) > 0 {
+		config.VolumesFrom = r.VolumesFrom()
+	}
+	// WorkingDir
+	if len(r.WorkingDir()) > 0 {
+		config.WorkingDir = r.WorkingDir()
+	}
+
+	// Command
+	if cmds, err := r.Cmd(); err != nil {
+		for _, cmd := range cmds {
+			config.Cmd = append(config.Cmd, cmd)
+		}
+	} else {
+		return nil, fmt.Errorf("Run parameters error:: Errror while parsing cmd:: %v", err)
+	}
+
+	return config, nil
 }

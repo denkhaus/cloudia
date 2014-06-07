@@ -2,10 +2,15 @@ package engine
 
 import (
 	"container/list"
+	"errors"
 	"fmt"
 	"github.com/denkhaus/tcgl/applog"
-	"github.com/tsuru/docker-cluster/cluster"
+	//"github.com/tsuru/docker-cluster/cluster"
 	"math"
+)
+
+var (
+	errCircularDependency = errors.New("Manifest error:: circular dependency detected")
 )
 
 type ContainerAggregateFunc func(cont Container, val interface{}) interface{}
@@ -14,8 +19,8 @@ type ContainerFunc func(cont Container) error
 // Node represents a host running Docker. Each node has an ID and an address
 // (in the form <scheme>://<host>:<port>/).
 type Node struct {
-	Id      string `json:"id" yaml:"id"`
-	Address string `json:"address" yaml:"address"`
+	id      string
+	address string
 	engine  *Engine
 	tree    *Tree
 }
@@ -25,8 +30,8 @@ type Node struct {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 func (n Node) ToMap() map[string]string {
 	mp := make(map[string]string)
-	mp["address"] = n.Address
-	mp["ID"] = n.Id
+	mp["address"] = n.address
+	mp["ID"] = n.id
 	return mp
 }
 
@@ -34,46 +39,52 @@ func (n Node) ToMap() map[string]string {
 // String
 /////////////////////////////////////////////////////////////////////////////////////////////////
 func (n Node) String() string {
-
-	ret := fmt.Sprintf("id:%s, address:%s", n.Id, n.Address)
+	ret := fmt.Sprintf("id:%s, address:%s, containers: %d", n.id, n.address, n.tree.Length())
 	//ret = n.Aggregate(ret, func(cont Container, val interface{}) interface{} {
-	//	ret := val.(string)
-	//	ret += fmt.Sprintf("%s, ", cont.Name())
-	//	return ret
+	//	res := val.(string)
+	//	res += fmt.Sprintf("%s, ", cont.name)
+	//	return res
 	//}).(string)
 	return ret
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
-// Initialize
+// NewNode
 /////////////////////////////////////////////////////////////////////////////////////////////////
-func (n Node) Initialize(c *cluster.Cluster, cnts []Container) error {
-	applog.Infof("Apply container template -> [%s]", n)
-	if err := n.Apply(cnts); err != nil {
-		return err
+func NewNode(id, address string, e *Engine, tmps []Template) (*Node, error) {
+	node := &Node{id: id, address: address, engine: e, tree: NewTree()}
+
+	applog.Infof("Apply container templates -> [%s]", node)
+	if err := node.Apply(tmps); err != nil {
+		return nil, err
 	}
-	applog.Infof("Register with cluster -> [%s]", n)
-	if err := c.Register(n.ToMap()); err != nil {
-		return err
+	applog.Infof("Register with cluster -> [%s]", node)
+	if err := e.cluster.Register(node.ToMap()); err != nil {
+		return nil, err
 	}
 
-	return nil
+	return node, nil
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (n Node) Apply(conts []Container) error {
+func (n Node) Apply(tmps []Template) error {
+	tree := n.tree
 
-	tree := NewTree()
-	for _, cont := range conts {
+	for _, tmp := range tmps {
+		cont, err := NewContainerFromTemplate(tmp, &n)
+		if err != nil {
+			return err
+		}
+
 		//check if container is required
 		var requiredIns *list.Element
 		nRequiredIdx := math.MaxInt64
-		for e := tree.Front(); e != nil; e = e.Next() {
+		for e := tree.First(); e != nil; e = e.Next() {
 			cnt := e.Value.(Container)
-			for _, name := range cnt.Requirements {
-				if name == cont.Name() {
+			for _, name := range cnt.reqmnts {
+				if name == cont.name {
 					idx := tree.GetIndex(cnt)
 					if idx < nRequiredIdx {
 						requiredIns = cnt.elm
@@ -83,10 +94,11 @@ func (n Node) Apply(conts []Container) error {
 			}
 		}
 
-		deps := cont.Requirements
+		deps := cont.reqmnts
 		if len(deps) == 0 && requiredIns == nil {
+			applog.Debugf("Apply template %s - no requirements, not required", cont.name)
 			//if is not required and has no requirements
-			tree.TreePushBack(cont)
+			tree.TreePushBack(*cont)
 			continue
 		}
 
@@ -113,17 +125,19 @@ func (n Node) Apply(conts []Container) error {
 			return errCircularDependency
 		}
 
+		applog.Debugf("Apply template %s: reqIdx: %d, hasReqIdx: %d", cont.name, nRequiredIdx, nHasRequirementsIdx)
+
 		if hasRequirementsIns != nil && requiredIns == nil { // only has requirements
-			tree.TreeInsertAfter(cont, hasRequirementsIns)
+			tree.TreeInsertAfter(*cont, hasRequirementsIns)
 		} else if hasRequirementsIns == nil && requiredIns != nil { //only is required
-			tree.TreeInsertBefore(cont, requiredIns)
+			tree.TreeInsertBefore(*cont, requiredIns)
 		} else if nRequiredIdx > nHasRequirementsIdx {
 
 		}
 	}
 
+	applog.Debugf("Apply templates:: Building node with %d container(s) finished.", tree.Length())
 	//TODO check unmet requirements
-	n.tree = tree
 	return nil
 }
 
@@ -131,29 +145,17 @@ func (n Node) Apply(conts []Container) error {
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (n Node) HasContainers() bool {
-	return n.tree.Len() != 0
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////
-//
-///////////////////////////////////////////////////////////////////////////////////////////////
-func (n Node) First() *list.Element {
-	return n.tree.Front()
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////
-//
-///////////////////////////////////////////////////////////////////////////////////////////////
-func (n Node) Last() *list.Element {
-	return n.tree.Back()
+	return n.tree.Length() != 0
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (n Node) Aggregate(val interface{}, fn ContainerAggregateFunc) interface{} {
-	for e := n.First(); e != nil; e = e.Next() {
-		val = fn(e.Value.(Container), val)
+	for e := n.tree.First(); e != nil; e = e.Next() {
+		if cnt, ok := e.Value.(Container); ok {
+			val = fn(cnt, val)
+		}
 	}
 	return val
 }
@@ -162,10 +164,13 @@ func (n Node) Aggregate(val interface{}, fn ContainerAggregateFunc) interface{} 
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (n Node) ForAll(fn ContainerFunc) error {
-	for e := n.tree.Front(); e != nil; e = e.Next() {
-		if err := fn(e.Value.(Container)); err != nil {
-			return err
+	for e := n.tree.First(); e != nil; e = e.Next() {
+		if cnt, ok := e.Value.(Container); ok {
+			if err := fn(cnt); err != nil {
+				return err
+			}
 		}
+
 	}
 	return nil
 }
@@ -174,7 +179,7 @@ func (n Node) ForAll(fn ContainerFunc) error {
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (n Node) ForAllReversed(fn ContainerFunc) error {
-	for e := n.Last(); e != nil; e = e.Prev() {
+	for e := n.tree.Last(); e != nil; e = e.Prev() {
 		if err := fn(e.Value.(Container)); err != nil {
 			return err
 		}
