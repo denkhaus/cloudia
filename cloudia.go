@@ -18,7 +18,7 @@ func main() {
 	app.Flags = []cli.Flag{
 		cli.StringFlag{"group, g", "", "group or container to restrict the command to"},
 		cli.StringFlag{"manifest, m", "", "path to a manifest (.json, .yml, .yaml) file to read from"},
-
+		cli.BoolFlag{"debug, d", "print debug output"},
 		//	cli.StringSliceFlag{"peers, C", &cli.StringSlice{}, "a comma-delimited list of machine addresses in the cluster (default: {\"127.0.0.1:4001\"})"},
 	}
 

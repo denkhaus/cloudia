@@ -2,15 +2,18 @@ package engine
 
 import (
 	"errors"
-	//"fmt"
+	"fmt"
 	"github.com/denkhaus/tcgl/applog"
+	"github.com/fsouza/go-dockerclient"
 	"github.com/tsuru/docker-cluster/cluster"
 	"github.com/tsuru/docker-cluster/storage"
+	"sync"
 )
 
 var (
 	errRedisAddressNotSpecified = errors.New("Storage error:: Please specify redis storage address as <scheme>://<host>:<port>.")
 	errEmptyNodes               = errors.New("Manifest error:: Please specify at least one node.")
+	errManifestIdMissing        = errors.New("Manifest error:: Manifest Id missing. Every manifest needs an id to declare every container on each host and itself unique.")
 	errEmptyContainerNames      = errors.New("Group error:: No containers available by provided group.")
 )
 
@@ -86,6 +89,10 @@ func (e *Engine) processManifest(man *Manifest, group string) error {
 		return errEmptyNodes
 	}
 
+	if len(man.Id) == 0 {
+		return errManifestIdMissing
+	}
+
 	names := man.GetTemplateNamesByGroup(group)
 	if len(names) == 0 {
 		return errEmptyContainerNames
@@ -93,14 +100,55 @@ func (e *Engine) processManifest(man *Manifest, group string) error {
 
 	tmps := man.GetTemplatesByNames(names)
 	for _, cn := range man.Nodes {
-		node, err := NewNode(cn.Id, cn.Address, e, tmps)
+		node, err := NewNode(cn.Id, cn.Address, man.Id, e, tmps)
 		if err != nil {
 			return err
 		}
 		e.nodes = append(e.nodes, *node)
 	}
 
+	opts := docker.ListContainersOptions{All: true}
+	e.refreshState(opts)
 	return nil
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+// refreshState
+///////////////////////////////////////////////////////////////////////////////////////////////
+func (e *Engine) refreshState(opts docker.ListContainersOptions) (errors []error) {
+
+	applog.Infof("Refresh container state from nodes...")
+
+	nodes := e.nodes
+	var wg sync.WaitGroup
+	errs := make(chan error, len(nodes))
+
+	for _, n := range nodes {
+		wg.Add(1)
+		client, _ := docker.NewClient(n.address)
+
+		go func(nd Node, c *docker.Client) {
+			defer wg.Done()
+			if cnts, err := c.ListContainers(opts); err != nil {
+				errs <- fmt.Errorf("State update error:: on node %s -> %s", nd, err.Error())
+			} else {
+				if err := nd.ApplyState(cnts); err != nil {
+					errs <- err
+				}
+			}
+		}(n, client)
+	}
+
+	wg.Wait()
+	for {
+		select {
+		case err := <-errs:
+			errors = append(errors, err)
+		default:
+			return
+		}
+	}
+	return
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////

@@ -20,6 +20,12 @@ func (c *Commander) Execute(fn engine.EngineFunc, ctx *cli.Context) {
 	filePath := ctx.GlobalString("manifest")
 	group := ctx.GlobalString("group")
 
+	if ctx.GlobalBool("debug") {
+		applog.SetLevel(applog.LevelDebug)
+	} else {
+		applog.SetLevel(applog.LevelInfo)
+	}
+
 	if len(filePath) > 0 {
 		err := c.engine.LoadFromFile(filePath, group)
 		if err != nil {

@@ -12,9 +12,8 @@ import (
 type RunParameters struct {
 	RawCidfile     string      `json:"cidfile" yaml:"cidfile"`
 	CpuShares      int         `json:"cpu-shares" yaml:"cpu-shares"`
-	Detach         bool        `json:"detach" yaml:"detach"`
 	RawDns         []string    `json:"dns" yaml:"dns"`
-	RawEntrypoint  string      `json:"entrypoint" yaml:"entrypoint"`
+	RawEntrypoint  []string    `json:"entrypoint" yaml:"entrypoint"`
 	RawEnv         []string    `json:"env" yaml:"env"`
 	RawEnvFile     string      `json:"env-file" yaml:"env-file"`
 	RawExpose      []string    `json:"expose" yaml:"expose"`
@@ -23,14 +22,15 @@ type RunParameters struct {
 	RawLink        []string    `json:"link" yaml:"link"`
 	RawLxcConf     []string    `json:"lxc-conf" yaml:"lxc-conf"`
 	RawMemory      string      `json:"memory" yaml:"memory"`
+	RawMemorySwap  string      `json:"memory-swap" yaml:"memory-swap"`
 	RawNet         string      `json:"net" yaml:"net"`
 	Privileged     bool        `json:"privileged" yaml:"privileged"`
-	RawPublish     []string    `json:"publish" yaml:"publish"`
+	RawPorts       []string    `json:"ports" yaml:"ports"`
 	PublishAll     bool        `json:"publish-all" yaml:"publish-all"`
 	Rm             bool        `json:"rm" yaml:"rm"`
 	Tty            bool        `json:"tty" yaml:"tty"`
 	RawUser        string      `json:"user" yaml:"user"`
-	RawVolumes     []string    `json:"volume" yaml:"volume"`
+	RawBinds       []string    `json:"binds" yaml:"binds"`
 	RawVolumesFrom string      `json:"volumes-from" yaml:"volumes-from"`
 	RawWorkdir     string      `json:"workdir" yaml:"workdir"`
 	RawCmd         interface{} `json:"cmd" yaml:"cmd"`
@@ -57,8 +57,12 @@ func (r *RunParameters) Dns() []string {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (r *RunParameters) Entrypoint() string {
-	return os.ExpandEnv(r.RawEntrypoint)
+func (r *RunParameters) Entrypoint() []string {
+	var ep []string
+	for _, rawEp := range r.RawEntrypoint {
+		ep = append(ep, os.ExpandEnv(rawEp))
+	}
+	return ep
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -111,19 +115,15 @@ func (r *RunParameters) Link() []string {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (r *RunParameters) LxcConf() []string {
-	var lxcConf []string
-	for _, rawLxcConf := range r.RawLxcConf {
-		lxcConf = append(lxcConf, os.ExpandEnv(rawLxcConf))
-	}
-	return lxcConf
+func (r *RunParameters) Memory() string {
+	return os.ExpandEnv(r.RawMemory)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (r *RunParameters) Memory() string {
-	return os.ExpandEnv(r.RawMemory)
+func (r *RunParameters) MemorySwap() string {
+	return os.ExpandEnv(r.RawMemorySwap)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -141,12 +141,46 @@ func (r *RunParameters) Net() string {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (r *RunParameters) Publish() []string {
-	var publish []string
-	for _, rawPublish := range r.RawPublish {
-		publish = append(publish, os.ExpandEnv(rawPublish))
+func (r *RunParameters) PortMappings() []string {
+	var ports []string
+	for _, rawPort := range r.RawPorts {
+		var expPorts []string
+		for _, port := range strings.Split(rawPort, ":") {
+			expPorts = append(expPorts, os.ExpandEnv(port))
+		}
+		ports = append(ports, strings.Join(expPorts, ":"))
 	}
-	return publish
+	return ports
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
+func (r *RunParameters) PortBindings() map[docker.Port][]docker.PortBinding {
+	bindings := make(map[docker.Port][]docker.PortBinding)
+
+	for _, mapping := range r.PortMappings() {
+		var bndngs []docker.PortBinding
+		tok := strings.Split(mapping, ":")
+		bndngs = append(bndngs, docker.PortBinding{HostPort: tok[0]})
+		bindings[docker.Port(tok[1]+"/tcp")] = bndngs
+	}
+
+	return bindings
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
+func (r *RunParameters) ExposedPorts() map[docker.Port]struct{} {
+	type param struct{}
+	ports := make(map[docker.Port]struct{})
+
+	for port, _ := range r.PortBindings() {
+		ports[port] = param{}
+	}
+
+	return ports
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -159,11 +193,27 @@ func (r *RunParameters) User() string {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (r *RunParameters) Volumes() []string {
-	var volumes []string
-	for _, rawVolume := range r.RawVolumes {
-		paths := strings.Split(rawVolume, ":")
-		volumes = append(volumes, os.ExpandEnv(strings.Join(paths, ":")))
+func (r *RunParameters) Binds() []string {
+	var binds []string
+	for _, rawBind := range r.RawBinds {
+		var expPaths []string
+		for _, path := range strings.Split(rawBind, ":") {
+			expPaths = append(expPaths, os.ExpandEnv(path))
+		}
+		binds = append(binds, strings.Join(expPaths, ":"))
+	}
+	return binds
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
+func (r *RunParameters) Volumes() map[string]struct{} {
+	type param struct{}
+	var volumes = make(map[string]struct{})
+	for _, bind := range r.Binds() {
+		tok := strings.Split(bind, ":")
+		volumes[tok[1]] = param{}
 	}
 	return volumes
 }
@@ -180,6 +230,24 @@ func (r *RunParameters) VolumesFrom() string {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (r *RunParameters) WorkingDir() string {
 	return os.ExpandEnv(r.RawWorkdir)
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
+func (r *RunParameters) LxcConf() []docker.KeyValuePair {
+	var cnf []docker.KeyValuePair
+	for _, rawConf := range r.RawLxcConf {
+		tok := strings.Split(rawConf, ":")
+		kv := docker.KeyValuePair{
+			Key:   os.ExpandEnv(tok[0]),
+			Value: os.ExpandEnv(tok[1]),
+		}
+
+		cnf = append(cnf, kv)
+	}
+
+	return cnf
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -208,96 +276,60 @@ func (r *RunParameters) Cmd() ([]string, error) {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func (r *RunParameters) CreateDockerConfig() (*docker.HostConfig, error) {
+func (r *RunParameters) CreateDockerHostConfig() (*docker.HostConfig, error) {
 	config := &docker.HostConfig{}
-	//		if len(container.Run.Cidfile()) > 0 {
-	//			args = append(args, "--cidfile", container.Run.Cidfile())
-	//		}
 
-	//		// Detach
-	//		if container.Run.Detach {
-	//			args = append(args, "--detach")
-	//		}
+	config.Privileged = r.Privileged
+	config.PublishAllPorts = r.PublishAll
+	config.ContainerIDFile = r.Cidfile()
+	config.PortBindings = r.PortBindings()
+	config.LxcConf = r.LxcConf()
 
-	//		// Entrypoint
-	//		if len(container.Run.Entrypoint()) > 0 {
-	//			args = append(args, "--entrypoint", container.Run.Entrypoint())
-	//		}
+	config.Dns = append(config.Dns, r.Dns()...)
+	config.Links = append(config.Links, r.Link()...)
+	config.Binds = append(config.Binds, r.Binds()...)
 
-	//		// Env file
-	//		if len(container.Run.EnvFile()) > 0 {
-	//			args = append(args, "--env-file", container.Run.EnvFile())
-	//		}
-	//		// Expose
-	//		for _, expose := range container.Run.Expose() {
-	//			args = append(args, "--expose", expose)
-	//		}
-
-	//		// Interactive
-	//		if container.Run.Interactive {
-	//			args = append(args, "--interactive")
-	//		}
-	//		// Link
-	//		for _, link := range container.Run.Link() {
-	//			args = append(args, "--link", link)
-	//		}
-	//		// LxcConf
-	//		for _, lxcConf := range container.Run.LxcConf() {
-	//			args = append(args, "--lxc-conf", lxcConf)
-	//		}
-
-	//		// Net
-	//		if container.Run.Net() != "bridge" {
-	//			args = append(args, "--net", container.Run.Net())
-	//		}
-
-	//		// Privileged
-	//		if container.Run.Privileged {
-	//			args = append(args, "--privileged")
-	//		}
-	//		// Publish
-	//		for _, port := range container.Run.Publish() {
-	//			args = append(args, "--publish", port)
-	//		}
-	//		// PublishAll
-	//		if container.Run.PublishAll {
-	//			args = append(args, "--publish-all")
-	//		}
-	//		// Rm
-	//		if container.Run.Rm {
-	//			args = append(args, "--rm")
-	//		}
-	//		// Tty
-	//		if container.Run.Tty {
-	//			args = append(args, "--tty")
-	//		}
-
-	return config
+	return config, nil
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (r *RunParameters) CreateDockerConfig() (*docker.Config, error) {
-
 	config := &docker.Config{}
 
-	// CPU shares
-	if r.CpuShares > 0 {
-		config.CpuShares = int64(r.CpuShares)
+	//TODO
+	//Domainname      string
+	//PortSpecs       []string
+	//OpenStdin       bool
+	//StdinOnce       bool
+	//Image           string
+	//NetworkDisabled bool
+
+	//TODO defaults
+	config.AttachStdout = true
+	config.AttachStdin = true
+	config.AttachStderr = false
+
+	config.Tty = r.Tty
+	config.User = r.User()
+	config.Hostname = r.Hostname()
+	config.VolumesFrom = r.VolumesFrom()
+	config.WorkingDir = r.WorkingDir()
+	config.ExposedPorts = r.ExposedPorts()
+	config.CpuShares = int64(r.CpuShares)
+	config.Volumes = r.Volumes()
+
+	config.Dns = append(config.Dns, r.Dns()...)
+	config.Env = append(config.Env, r.Env()...)
+	config.Entrypoint = append(config.Env, r.Entrypoint()...)
+
+	if cmds, err := r.Cmd(); err != nil {
+		config.Cmd = append(config.Cmd, cmds...)
+	} else {
+		return nil, fmt.Errorf("Run parameters error:: Errror while parsing cmd:: %v", err)
 	}
-	// Dns
-	for _, dns := range r.Dns() {
-		config.Dns = append(config.Dns, dns)
-	}
-	// Env
-	for _, env := range r.Env() {
-		config.Env = append(config.Env, env)
-	}
-	// Host
-	if len(r.Hostname()) > 0 {
-		config.Hostname = r.Hostname()
-	}
+
 	// Memory
 	if len(r.Memory()) > 0 {
 		if mem, err := strconv.ParseInt(r.Memory(), 10, 64); err == nil {
@@ -307,32 +339,15 @@ func (r *RunParameters) CreateDockerConfig() (*docker.Config, error) {
 		}
 
 	}
-	// User
-	if len(r.User()) > 0 {
-		config.User = r.User()
-	}
 
-	// TODO Volumes
-	//for _, volume := range cnt.Run.Volumes() {
-	//	config.Volumes = append(config.Volumes, volume)
-	//}
-
-	// VolumesFrom
-	if len(r.VolumesFrom()) > 0 {
-		config.VolumesFrom = r.VolumesFrom()
-	}
-	// WorkingDir
-	if len(r.WorkingDir()) > 0 {
-		config.WorkingDir = r.WorkingDir()
-	}
-
-	// Command
-	if cmds, err := r.Cmd(); err != nil {
-		for _, cmd := range cmds {
-			config.Cmd = append(config.Cmd, cmd)
+	// MemorySwap
+	if len(r.MemorySwap()) > 0 {
+		if swap, err := strconv.ParseInt(r.MemorySwap(), 10, 64); err == nil {
+			config.MemorySwap = swap
+		} else {
+			return nil, fmt.Errorf("Run parameters error:: Unable to convert memory-swap param to int64 %v", err)
 		}
-	} else {
-		return nil, fmt.Errorf("Run parameters error:: Errror while parsing cmd:: %v", err)
+
 	}
 
 	return config, nil

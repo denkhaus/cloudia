@@ -40,6 +40,7 @@ type ClusterNode struct {
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
 type Manifest struct {
+	Id        string              `json:"manifest-id" yaml:"manifest-id"`
 	Templates []Template          `json:"containers" yaml:"containers"`
 	Groups    map[string][]string `json:"groups" yaml:"groups"`
 	Nodes     []ClusterNode       `json:"nodes" yaml:"nodes"`

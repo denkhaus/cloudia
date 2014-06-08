@@ -2,28 +2,36 @@ package engine
 
 import (
 	"container/list"
+	"fmt"
 	"github.com/denkhaus/tcgl/applog"
 	"github.com/fsouza/go-dockerclient"
 )
 
 type Container struct {
-	id                   string
-	elm                  *list.Element
-	node                 *Node
-	response             *docker.Container
-	hostConfig           *docker.HostConfig
-	config               *docker.Config
-	name                 string
-	image                string
-	reqmnts              []string
-	stopContainerTimeout uint
+	id                           string
+	manifestId                   string
+	elm                          *list.Element
+	node                         *Node
+	response                     *docker.Container
+	hostConfig                   *docker.HostConfig
+	config                       *docker.Config
+	name                         string
+	image                        string
+	reqmnts                      []string
+	stopContainerTimeout         uint
+	removeContainerForce         bool
+	removeContainerRemoveVolumes bool
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 ////
 /////////////////////////////////////////////////////////////////////////////////////////////////
 func NewContainerFromTemplate(tmp Template, node *Node) (*Container, error) {
-	cnt := &Container{node: node}
+	cnt := &Container{node: node, manifestId: node.manifestId}
+
+	cnt.removeContainerForce = false
+	cnt.removeContainerRemoveVolumes = false
+	cnt.stopContainerTimeout = 10 //seconds
 
 	cnt.name = tmp.Name()
 	cnt.image = tmp.Image()
@@ -42,30 +50,35 @@ func NewContainerFromTemplate(tmp Template, node *Node) (*Container, error) {
 	cnt.hostConfig = hstcnf
 
 	cnt.config.Image = cnt.image
-	cnt.stopContainerTimeout = 30 //seconds
 	return cnt, nil
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
-////
+//// RemoveSelfReference
 /////////////////////////////////////////////////////////////////////////////////////////////////
-//func (container *Container) Id() (id string, err error) {
-//	if len(container.id) > 0 {
-//		id = container.id
-//	} else {
-//		// Inspect container, extracting the ID.
-//		// This will return gibberish if no container is found.
-//		args := []string{"inspect", "--format={{.ID}}", container.Name()}
-//		output, outErr := commandOutput("docker", args)
-//		if err == nil {
-//			id = output
-//			container.id = output
-//		} else {
-//			err = outErr
-//		}
-//	}
-//	return
-//}
+func (cnt *Container) RemoveSelfReference() {
+	var rq []string
+	for _, ref := range cnt.reqmnts {
+		if cnt.name != ref {
+			rq = append(rq, ref)
+		}
+	}
+	cnt.reqmnts = rq
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+//// FullQualifiedName
+/////////////////////////////////////////////////////////////////////////////////////////////////
+func (cnt *Container) FullQualifiedName() string {
+	return fmt.Sprintf("%s-%s", cnt.name, cnt.manifestId)
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+// String
+/////////////////////////////////////////////////////////////////////////////////////////////////
+func (cnt *Container) String() string {
+	return cnt.name
+}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 ////
@@ -201,7 +214,7 @@ func (cnt Container) create() error {
 	applog.Infof("Creating container %s on node %s ", cnt.name, cnt.node)
 
 	clst := cnt.node.engine.cluster
-	opts := docker.CreateContainerOptions{Config: cnt.config, Name: cnt.name}
+	opts := docker.CreateContainerOptions{Config: cnt.config, Name: cnt.FullQualifiedName()}
 	id, newCont, err := clst.CreateContainer(opts, cnt.node.id)
 	if err != nil {
 		return err
@@ -239,8 +252,8 @@ func (cnt Container) run() error {
 // Start container
 /////////////////////////////////////////////////////////////////////////////////////////////////
 func (cnt Container) start() error {
-	if container.exists() {
-		if !container.running() {
+	if cnt.exists() {
+		if !cnt.running() {
 			applog.Infof("Attempt to start container %s on node %s", cnt.name, cnt.node)
 			clst := cnt.node.engine.cluster
 			return clst.StartContainer(cnt.id, cnt.hostConfig)
@@ -289,15 +302,19 @@ func (cnt Container) stop() error {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 //Remove container
 /////////////////////////////////////////////////////////////////////////////////////////////////
-func (container Container) remove() error {
-	//	if container.exists() {
-	//		if container.running() {
-	//			print.Error("Container %s is running and cannot be removed.\n", container.Name())
-	//		} else {
-	//			fmt.Printf("Removing container %s ... ", container.Name())
-	//			args := []string{"rm", container.Name()}
-	//			executeCommand("docker", args)
-	//		}
-	//	}
+func (cnt Container) remove() error {
+	if cnt.exists() {
+		if cnt.running() {
+			applog.Infof("Attempt to remove container %s on node %s not successfull. Container is running", cnt.name, cnt.node)
+		} else {
+			applog.Infof("Attempt to remove container %s on node %s", cnt.name, cnt.node)
+			opts := docker.RemoveContainerOptions{ID: cnt.id}
+			opts.Force = cnt.removeContainerForce
+			opts.RemoveVolumes = cnt.removeContainerRemoveVolumes
+
+			clst := cnt.node.engine.cluster
+			return clst.RemoveContainer(opts)
+		}
+	}
 	return nil
 }

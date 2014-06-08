@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/denkhaus/tcgl/applog"
-	//"github.com/tsuru/docker-cluster/cluster"
+	"github.com/fsouza/go-dockerclient"
 	"math"
 )
 
@@ -19,10 +19,11 @@ type ContainerFunc func(cont Container) error
 // Node represents a host running Docker. Each node has an ID and an address
 // (in the form <scheme>://<host>:<port>/).
 type Node struct {
-	id      string
-	address string
-	engine  *Engine
-	tree    *Tree
+	id         string
+	manifestId string
+	address    string
+	engine     *Engine
+	tree       *Tree
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,8 +52,8 @@ func (n Node) String() string {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // NewNode
 /////////////////////////////////////////////////////////////////////////////////////////////////
-func NewNode(id, address string, e *Engine, tmps []Template) (*Node, error) {
-	node := &Node{id: id, address: address, engine: e, tree: NewTree()}
+func NewNode(id, address, manId string, e *Engine, tmps []Template) (*Node, error) {
+	node := &Node{id: id, address: address, manifestId: manId, engine: e, tree: NewTree()}
 
 	applog.Infof("Apply container templates -> [%s]", node)
 	if err := node.Apply(tmps); err != nil {
@@ -69,6 +70,26 @@ func NewNode(id, address string, e *Engine, tmps []Template) (*Node, error) {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
+func (n Node) ApplyState(cnts []docker.APIContainers) error {
+
+	for _, apiCnt := range cnts {
+		for _, name := range apiCnt.Names {
+			n.ForAll(func(cnt Container) error {
+				if name[1:] == cnt.FullQualifiedName() {
+					applog.Debugf("Apply Id of container %s on node [%s]", &cnt, n)
+					cnt.id = apiCnt.ID
+				}
+				return nil
+			})
+		}
+	}
+
+	return nil
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////////////////////
 func (n Node) Apply(tmps []Template) error {
 	tree := n.tree
 
@@ -78,6 +99,7 @@ func (n Node) Apply(tmps []Template) error {
 			return err
 		}
 
+		cont.RemoveSelfReference()
 		//check if container is required
 		var requiredIns *list.Element
 		nRequiredIdx := math.MaxInt64
@@ -153,9 +175,7 @@ func (n Node) HasContainers() bool {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (n Node) Aggregate(val interface{}, fn ContainerAggregateFunc) interface{} {
 	for e := n.tree.First(); e != nil; e = e.Next() {
-		if cnt, ok := e.Value.(Container); ok {
-			val = fn(cnt, val)
-		}
+		val = fn(e.Value.(Container), val)
 	}
 	return val
 }
@@ -165,12 +185,9 @@ func (n Node) Aggregate(val interface{}, fn ContainerAggregateFunc) interface{} 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (n Node) ForAll(fn ContainerFunc) error {
 	for e := n.tree.First(); e != nil; e = e.Next() {
-		if cnt, ok := e.Value.(Container); ok {
-			if err := fn(cnt); err != nil {
-				return err
-			}
+		if err := fn(e.Value.(Container)); err != nil {
+			return err
 		}
-
 	}
 	return nil
 }
