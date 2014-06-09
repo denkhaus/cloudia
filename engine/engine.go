@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"github.com/denkhaus/tcgl/applog"
 	"github.com/fsouza/go-dockerclient"
-	"github.com/tsuru/docker-cluster/cluster"
-	"github.com/tsuru/docker-cluster/storage"
 	"sync"
 )
 
@@ -18,8 +16,7 @@ var (
 )
 
 type Engine struct {
-	nodes   []Node
-	cluster *cluster.Cluster
+	nodes []Node
 }
 
 type EngineFunc func(cont Node) error
@@ -117,7 +114,7 @@ func (e *Engine) processManifest(man *Manifest, group string) error {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (e *Engine) refreshState(opts docker.ListContainersOptions) (errors []error) {
 
-	applog.Infof("Refresh container state from nodes...")
+	applog.Infof("Retrieve container infos from nodes...")
 
 	nodes := e.nodes
 	var wg sync.WaitGroup
@@ -195,27 +192,7 @@ func (e *Engine) Execute(fn EngineFunc) error {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 // NewEngine
 ///////////////////////////////////////////////////////////////////////////////////////////////
-func NewEngine(storageAddress, storagePassword, storagePrefix string) (*Engine, error) {
+func NewEngine() (*Engine, error) {
 	eng := &Engine{}
-
-	applog.Debugf("Create cluster store")
-	if len(storageAddress) == 0 {
-		return nil, errRedisAddressNotSpecified
-	}
-
-	var store cluster.Storage
-	if len(storagePassword) > 0 {
-		store = storage.AuthenticatedRedis(storageAddress, storagePassword, storagePrefix)
-	} else {
-		store = storage.Redis(storageAddress, storagePrefix)
-	}
-
-	//TODO define scheduler ?
-	clst, err := cluster.New(nil, store)
-	if err != nil {
-		return nil, err
-	}
-
-	eng.cluster = clst
 	return eng, nil
 }

@@ -24,9 +24,9 @@ func main() {
 
 	cnf := yamlconfig.NewConfig(".cldiarc")
 	if err := cnf.Load(func(config *yamlconfig.Config) {
-		config.SetDefault("storage:address", "127.0.0.1:6379")
-		config.SetDefault("storage:password", "")
-		config.SetDefault("storage:prefix", "cldia")
+		//config.SetDefault("storage:address", "127.0.0.1:6379")
+		//config.SetDefault("storage:password", "")
+		//config.SetDefault("storage:prefix", "cldia")
 	}, "", false); err != nil {
 		applog.Errorf("config error:: load config %s", err.Error())
 		return

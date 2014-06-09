@@ -47,8 +47,8 @@ func NewContainerFromTemplate(tmp Template, node *Node) (*Container, error) {
 	if err != nil {
 		return nil, err
 	}
-	cnt.hostConfig = hstcnf
 
+	cnt.hostConfig = hstcnf
 	cnt.config.Image = cnt.image
 	return cnt, nil
 }
@@ -64,6 +64,13 @@ func (cnt *Container) RemoveSelfReference() {
 		}
 	}
 	cnt.reqmnts = rq
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+//// SetId
+/////////////////////////////////////////////////////////////////////////////////////////////////
+func (cnt *Container) SetId(id string) {
+	cnt.id = id
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -83,49 +90,38 @@ func (cnt *Container) String() string {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 ////
 /////////////////////////////////////////////////////////////////////////////////////////////////
-func (cnt *Container) exists() bool {
-	//	// `ps -a` returns all existant containers
-	//	id, err := container.Id()
-	//	if err != nil || len(id) == 0 {
-	//		return false
-	//	}
-	//	dockerCmd := []string{"docker", "ps", "--quiet", "--all", "--no-trunc"}
-	//	grepCmd := []string{"grep", "-wF", id}
-	//	output, err := pipedCommandOutput(dockerCmd, grepCmd)
-	//	if err != nil {
-	//		return false
-	//	}
-	//	result := string(output)
-	//	if len(result) > 0 {
-	//		return true
-	//	} else {
-	//		return false
-	//	}
+func (cnt *Container) retrieveState() bool {
 
-	return false
+	if len(cnt.id) == 0 {
+		applog.Errorf("Container error:: cannot retrieve infos -> id not set")
+		return false
+	}
+
+	client := cnt.node.client
+	cont, err := client.InspectContainer(cnt.id)
+	if err != nil {
+		applog.Errorf("Container error:: while checking status -> %s", err.Error())
+		return false
+	}
+	cnt.response = cont
+	return true
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+////
+/////////////////////////////////////////////////////////////////////////////////////////////////
+func (cnt *Container) exists() bool {
+	return cnt.retrieveState()
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 ////
 /////////////////////////////////////////////////////////////////////////////////////////////////
 func (cnt *Container) running() bool {
-	//	// `ps` returns all running containers
-	//	id, err := container.Id()
-	//	if err != nil || len(id) == 0 {
-	//		return false
-	//	}
-	//	dockerCmd := []string{"docker", "ps", "--quiet", "--no-trunc"}
-	//	grepCmd := []string{"grep", "-wF", id}
-	//	output, err := pipedCommandOutput(dockerCmd, grepCmd)
-	//	if err != nil {
-	//		return false
-	//	}
-	//	result := string(output)
-	//	if len(result) > 0 {
-	//		return true
-	//	} else {
-	//		return false
-	//	}
+	if ok := cnt.retrieveState(); ok {
+		state := cnt.response.State
+		return state.Running
+	}
 
 	return false
 }
@@ -133,73 +129,31 @@ func (cnt *Container) running() bool {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 ////
 /////////////////////////////////////////////////////////////////////////////////////////////////
-//func (container *Container) imageExists() bool {
-//	dockerCmd := []string{"docker", "images", "--no-trunc"}
-//	grepCmd := []string{"grep", "-wF", container.Image()}
-//	output, err := pipedCommandOutput(dockerCmd, grepCmd)
-//	if err != nil {
-//		return false
-//	}
-//	result := string(output)
-//	if len(result) > 0 {
-//		return true
-//	} else {
-//		return false
-//	}
-//}
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-////
-/////////////////////////////////////////////////////////////////////////////////////////////////
 func (cnt *Container) status() error {
-	//w * tabwriter.Writer
-	//	args := []string{"inspect", "--format={{.State.Running}}\t{{.ID}}\t{{if .NetworkSettings.IPAddress}}{{.NetworkSettings.IPAddress}}{{else}}-{{end}}\t{{range $k,$v := $.NetworkSettings.Ports}}{{$k}},{{end}}", container.Name()}
-	//	output, err := commandOutput("docker", args)
-	//	if err != nil {
-	//		fmt.Fprintf(w, "%s\tError:%v\t%v\n", container.Name(), err, output)
-	//		return
-	//	}
-	//	fmt.Fprintf(w, "%s\t%s\n", container.Name(), output)
 	return nil
 }
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-////
-/////////////////////////////////////////////////////////////////////////////////////////////////
-//// Pull image for container
-//func (container *Container) pullImage() {
-//	fmt.Printf("Pulling image %s ... ", container.Image())
-//	args := []string{"pull", container.Image()}
-//	executeCommand("docker", args)
-//}
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-////
-/////////////////////////////////////////////////////////////////////////////////////////////////
-//// Build image for container
-//func (container *Container) buildImage() {
-//	fmt.Printf("Building image %s ... ", container.Image())
-//	args := []string{"build", "--rm", "--tag=" + container.Image(), container.Dockerfile()}
-//	executeCommand("docker", args)
-//}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 ////
 /////////////////////////////////////////////////////////////////////////////////////////////////
 func (cnt *Container) provision(force bool) error {
 	if force || !cnt.exists() {
-		return cnt.create()
+		if err := cnt.create(); err != nil {
+			applog.Infof("Creating container %s on node %s not successfull.", cnt.name, cnt.node)
+			return err
+		} else {
+			applog.Infof("Container %s successfull created on node %s.", cnt.name, cnt.node)
+		}
 	} else {
-		applog.Infof("Container %s does already exist at node\n%s. Use --force to recreate.\n", cnt.image, cnt.node)
+		applog.Infof("Container %s already exists on node %s.", cnt.name, cnt.node)
 	}
-
 	return nil
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Run or start container
 /////////////////////////////////////////////////////////////////////////////////////////////////
-func (cnt Container) runOrStart() error {
+func (cnt *Container) runOrStart() error {
 	if cnt.exists() {
 		return cnt.start()
 	} else {
@@ -210,17 +164,24 @@ func (cnt Container) runOrStart() error {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Create container
 /////////////////////////////////////////////////////////////////////////////////////////////////
-func (cnt Container) create() error {
-	applog.Infof("Creating container %s on node %s ", cnt.name, cnt.node)
+func (cnt *Container) create() error {
 
-	clst := cnt.node.engine.cluster
+	client := cnt.node.client
 	opts := docker.CreateContainerOptions{Config: cnt.config, Name: cnt.FullQualifiedName()}
-	id, newCont, err := clst.CreateContainer(opts, cnt.node.id)
+
+	applog.Infof("Pull image %s for container %s on node %s ", opts.Config.Image, cnt, cnt.node)
+	err := client.PullImage(docker.PullImageOptions{Repository: opts.Config.Image}, docker.AuthConfiguration{})
 	if err != nil {
 		return err
 	}
 
-	cnt.id = id
+	applog.Infof("Creating container %s on node %s. Please wait...", cnt, cnt.node)
+	newCont, err := client.CreateContainer(opts)
+	if err != nil {
+		return err
+	}
+
+	cnt.id = newCont.ID
 	cnt.response = newCont
 	return nil
 }
@@ -228,21 +189,16 @@ func (cnt Container) create() error {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Run container
 /////////////////////////////////////////////////////////////////////////////////////////////////
-func (cnt Container) run() error {
+func (cnt *Container) run() error {
 	if cnt.exists() {
-		applog.Infof("Container %s does already exist on node\n%s. Use --force to recreate.", cnt.name, cnt.node)
 		if !cnt.running() {
-			err := cnt.start()
-			if err != nil {
-
-			}
+			return cnt.start()
 		}
 	} else {
-		err := cnt.create()
-		if err != nil {
-
+		if err := cnt.create(); err != nil {
+			return err
 		}
-
+		return cnt.start()
 	}
 
 	return nil
@@ -251,17 +207,21 @@ func (cnt Container) run() error {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Start container
 /////////////////////////////////////////////////////////////////////////////////////////////////
-func (cnt Container) start() error {
+func (cnt *Container) start() error {
 	if cnt.exists() {
 		if !cnt.running() {
-			applog.Infof("Attempt to start container %s on node %s", cnt.name, cnt.node)
-			clst := cnt.node.engine.cluster
-			return clst.StartContainer(cnt.id, cnt.hostConfig)
+			client := cnt.node.client
+			if err := client.StartContainer(cnt.id, cnt.hostConfig); err != nil {
+				applog.Infof("Starting container %s on node %s not successfull.", cnt.name, cnt.node)
+				return err
+			}
+			applog.Infof("Container %s successfull started on node %s.", cnt.name, cnt.node)
+
 		} else {
-			applog.Infof("Attempt to start container %s on node %s not successfull. Container is already running", cnt.name, cnt.node)
+			applog.Infof("Container %s is already running on node %s.", cnt.name, cnt.node)
 		}
 	} else {
-		applog.Infof("Attempt to start container %s on node %s not successfull. Container does not exist", cnt.name, cnt.node)
+		applog.Infof("Container %s does not exist on node %s.", cnt.name, cnt.node)
 	}
 
 	return nil
@@ -270,14 +230,22 @@ func (cnt Container) start() error {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Kill container
 /////////////////////////////////////////////////////////////////////////////////////////////////
-func (cnt Container) kill() error {
-	if cnt.running() {
-		applog.Infof("Attempt to kill container %s on node %s", cnt.name, cnt.node)
-		opts := docker.KillContainerOptions{ID: cnt.id}
-		clst := cnt.node.engine.cluster
-		return clst.KillContainer(opts)
+func (cnt *Container) kill() error {
+	if cnt.exists() {
+		if cnt.running() {
+			opts := docker.KillContainerOptions{ID: cnt.id}
+			client := cnt.node.client
+			if err := client.KillContainer(opts); err != nil {
+				applog.Infof("Killing container %s on node %s not successfull.", cnt.name, cnt.node)
+				return err
+			} else {
+				applog.Infof("Container %s successfull killed on node %s.", cnt.name, cnt.node)
+			}
+		} else {
+			applog.Infof("Container %s is not running on node %s.", cnt.name, cnt.node)
+		}
 	} else {
-		applog.Infof("Attempt to kill container %s on node %s not successfull. Container is not running", cnt.name, cnt.node)
+		applog.Infof("Container %s does not exist on node %s.", cnt.name, cnt.node)
 	}
 
 	return nil
@@ -287,34 +255,48 @@ func (cnt Container) kill() error {
 // Stop container
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-func (cnt Container) stop() error {
-	if cnt.running() {
-		applog.Infof("Attempt to stop container %s on node %s", cnt.name, cnt.node)
-		clst := cnt.node.engine.cluster
-		return clst.StopContainer(cnt.id, cnt.stopContainerTimeout)
-	} else {
-		applog.Infof("Attempt to stop container %s on node %s not successfull. Container is not running", cnt.name, cnt.node)
-	}
+func (cnt *Container) stop() error {
+	if cnt.exists() {
+		if cnt.running() {
+			client := cnt.node.client
+			if err := client.StopContainer(cnt.id, cnt.stopContainerTimeout); err != nil {
+				applog.Infof("Stopping container %s on node %s not successfull.", cnt.name, cnt.node)
+				return err
+			} else {
+				applog.Infof("Container %s successfull stopped on node %s.", cnt.name, cnt.node)
+			}
 
+		} else {
+			applog.Infof("Container %s is not running on node %s.", cnt.name, cnt.node)
+		}
+	} else {
+		applog.Infof("Container %s does not exist on node %s.", cnt.name, cnt.node)
+	}
 	return nil
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 //Remove container
 /////////////////////////////////////////////////////////////////////////////////////////////////
-func (cnt Container) remove() error {
+func (cnt *Container) remove() error {
 	if cnt.exists() {
 		if cnt.running() {
-			applog.Infof("Attempt to remove container %s on node %s not successfull. Container is running", cnt.name, cnt.node)
+			applog.Infof("Removing container %s on node %s not successfull. Container is running", cnt.name, cnt.node)
 		} else {
-			applog.Infof("Attempt to remove container %s on node %s", cnt.name, cnt.node)
 			opts := docker.RemoveContainerOptions{ID: cnt.id}
 			opts.Force = cnt.removeContainerForce
 			opts.RemoveVolumes = cnt.removeContainerRemoveVolumes
 
-			clst := cnt.node.engine.cluster
-			return clst.RemoveContainer(opts)
+			client := cnt.node.client
+			if err := client.RemoveContainer(opts); err != nil {
+				applog.Infof("Removing container %s on node %s not successfull.", cnt.name, cnt.node)
+				return err
+			} else {
+				applog.Infof("Container %s successfull removed on node %s.", cnt.name, cnt.node)
+			}
 		}
+	} else {
+		applog.Infof("Container %s does not exist on node %s.", cnt.name, cnt.node)
 	}
 	return nil
 }

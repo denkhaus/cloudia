@@ -51,12 +51,7 @@ func (c *Commander) Execute(fn engine.EngineFunc, ctx *cli.Context) {
 func NewCommander(app *cli.App, cnf *yamlconfig.Config) (*Commander, error) {
 	cmd := &Commander{app: app, config: cnf}
 
-	storPrefix := cnf.GetString("storage:prefix")
-	storAddress := cnf.GetString("storage:address")
-	storPassword := cnf.GetString("storage:password")
-
-	if engine, err := engine.NewEngine(
-		storAddress, storPassword, storPrefix); err != nil {
+	if engine, err := engine.NewEngine(); err != nil {
 		return nil, err
 	} else {
 		cmd.engine = engine

@@ -13,8 +13,8 @@ var (
 	errCircularDependency = errors.New("Manifest error:: circular dependency detected")
 )
 
-type ContainerAggregateFunc func(cont Container, val interface{}) interface{}
-type ContainerFunc func(cont Container) error
+type ContainerAggregateFunc func(e *list.Element, val interface{}) interface{}
+type ContainerFunc func(e *list.Element) error
 
 // Node represents a host running Docker. Each node has an ID and an address
 // (in the form <scheme>://<host>:<port>/).
@@ -24,28 +24,27 @@ type Node struct {
 	address    string
 	engine     *Engine
 	tree       *Tree
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-// ToMap
-/////////////////////////////////////////////////////////////////////////////////////////////////
-func (n Node) ToMap() map[string]string {
-	mp := make(map[string]string)
-	mp["address"] = n.address
-	mp["ID"] = n.id
-	return mp
+	client     *docker.Client
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // String
 /////////////////////////////////////////////////////////////////////////////////////////////////
 func (n Node) String() string {
-	ret := fmt.Sprintf("id:%s, address:%s, containers: %d", n.id, n.address, n.tree.Length())
+	//ret := fmt.Sprintf("id:%s, address:%s, containers: %d", n.id, n.address, n.tree.Length())
 	//ret = n.Aggregate(ret, func(cont Container, val interface{}) interface{} {
 	//	res := val.(string)
 	//	res += fmt.Sprintf("%s, ", cont.name)
 	//	return res
 	//}).(string)
+	return n.id
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+// Info1
+/////////////////////////////////////////////////////////////////////////////////////////////////
+func (n Node) Info1() string {
+	ret := fmt.Sprintf("id:%s, address:%s", n.id, n.address)
 	return ret
 }
 
@@ -55,12 +54,14 @@ func (n Node) String() string {
 func NewNode(id, address, manId string, e *Engine, tmps []Template) (*Node, error) {
 	node := &Node{id: id, address: address, manifestId: manId, engine: e, tree: NewTree()}
 
-	applog.Infof("Apply container templates -> [%s]", node)
-	if err := node.Apply(tmps); err != nil {
+	if client, err := docker.NewClient(address); err != nil {
 		return nil, err
+	} else {
+		node.client = client
 	}
-	applog.Infof("Register with cluster -> [%s]", node)
-	if err := e.cluster.Register(node.ToMap()); err != nil {
+
+	applog.Infof("Apply container templates -> [%s]", node.Info1())
+	if err := node.Apply(tmps); err != nil {
 		return nil, err
 	}
 
@@ -71,13 +72,14 @@ func NewNode(id, address, manId string, e *Engine, tmps []Template) (*Node, erro
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (n Node) ApplyState(cnts []docker.APIContainers) error {
-
 	for _, apiCnt := range cnts {
 		for _, name := range apiCnt.Names {
-			n.ForAll(func(cnt Container) error {
-				if name[1:] == cnt.FullQualifiedName() {
-					applog.Debugf("Apply Id of container %s on node [%s]", &cnt, n)
-					cnt.id = apiCnt.ID
+			n.ForAll(func(e *list.Element) error {
+				cnt := e.Value.(Container)
+				if name[1:] == cnt.FullQualifiedName() { // trim "/"
+					applog.Debugf("Apply Id of container %s on node [%s]", cnt, n)
+					cnt.SetId(apiCnt.ID)
+					e.Value = cnt
 				}
 				return nil
 			})
@@ -120,7 +122,8 @@ func (n Node) Apply(tmps []Template) error {
 		if len(deps) == 0 && requiredIns == nil {
 			applog.Debugf("Apply template %s - no requirements, not required", cont.name)
 			//if is not required and has no requirements
-			tree.TreePushBack(*cont)
+
+			cont.elm = tree.TreePushBack(*cont)
 			continue
 		}
 
@@ -150,9 +153,9 @@ func (n Node) Apply(tmps []Template) error {
 		applog.Debugf("Apply template %s: reqIdx: %d, hasReqIdx: %d", cont.name, nRequiredIdx, nHasRequirementsIdx)
 
 		if hasRequirementsIns != nil && requiredIns == nil { // only has requirements
-			tree.TreeInsertAfter(*cont, hasRequirementsIns)
+			cont.elm = tree.TreeInsertAfter(*cont, hasRequirementsIns)
 		} else if hasRequirementsIns == nil && requiredIns != nil { //only is required
-			tree.TreeInsertBefore(*cont, requiredIns)
+			cont.elm = tree.TreeInsertBefore(*cont, requiredIns)
 		} else if nRequiredIdx > nHasRequirementsIdx {
 
 		}
@@ -175,7 +178,7 @@ func (n Node) HasContainers() bool {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (n Node) Aggregate(val interface{}, fn ContainerAggregateFunc) interface{} {
 	for e := n.tree.First(); e != nil; e = e.Next() {
-		val = fn(e.Value.(Container), val)
+		val = fn(e, val)
 	}
 	return val
 }
@@ -185,7 +188,7 @@ func (n Node) Aggregate(val interface{}, fn ContainerAggregateFunc) interface{} 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (n Node) ForAll(fn ContainerFunc) error {
 	for e := n.tree.First(); e != nil; e = e.Next() {
-		if err := fn(e.Value.(Container)); err != nil {
+		if err := fn(e); err != nil {
 			return err
 		}
 	}
@@ -197,7 +200,7 @@ func (n Node) ForAll(fn ContainerFunc) error {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (n Node) ForAllReversed(fn ContainerFunc) error {
 	for e := n.tree.Last(); e != nil; e = e.Prev() {
-		if err := fn(e.Value.(Container)); err != nil {
+		if err := fn(e); err != nil {
 			return err
 		}
 	}
@@ -225,7 +228,8 @@ func (n Node) Lift(force bool, kill bool) error {
 // When forced, this will rebuild all images.
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (n Node) Provision(force bool) error {
-	err := n.ForAll(func(cnt Container) error {
+	err := n.ForAll(func(e *list.Element) error {
+		cnt := e.Value.(Container)
 		return cnt.provision(force)
 	})
 	return err
@@ -241,7 +245,8 @@ func (n Node) Run(force bool, kill bool) error {
 			return err
 		}
 	}
-	err := n.ForAll(func(cnt Container) error {
+	err := n.ForAll(func(e *list.Element) error {
+		cnt := e.Value.(Container)
 		return cnt.run()
 	})
 
@@ -258,7 +263,8 @@ func (n Node) runOrStart(force bool, kill bool) error {
 			return err
 		}
 	}
-	err := n.ForAll(func(cnt Container) error {
+	err := n.ForAll(func(e *list.Element) error {
+		cnt := e.Value.(Container)
 		return cnt.runOrStart()
 	})
 	return err
@@ -268,8 +274,9 @@ func (n Node) runOrStart(force bool, kill bool) error {
 // Start containers.
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (n Node) Start() error {
-	err := n.ForAll(func(cont Container) error {
-		return cont.start()
+	err := n.ForAll(func(e *list.Element) error {
+		cnt := e.Value.(Container)
+		return cnt.start()
 	})
 	return err
 }
@@ -278,8 +285,9 @@ func (n Node) Start() error {
 // Kill containers.
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (n Node) Kill() error {
-	err := n.ForAllReversed(func(cont Container) error {
-		return cont.kill()
+	err := n.ForAllReversed(func(e *list.Element) error {
+		cnt := e.Value.(Container)
+		return cnt.kill()
 	})
 	return err
 }
@@ -288,7 +296,8 @@ func (n Node) Kill() error {
 // Stop containers.
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (n Node) Stop() error {
-	err := n.ForAllReversed(func(cnt Container) error {
+	err := n.ForAllReversed(func(e *list.Element) error {
+		cnt := e.Value.(Container)
 		return cnt.stop()
 	})
 	return err
@@ -310,7 +319,8 @@ func (n Node) Remove(force bool, kill bool) error {
 			}
 		}
 	}
-	err := n.ForAllReversed(func(cnt Container) error {
+	err := n.ForAllReversed(func(e *list.Element) error {
+		cnt := e.Value.(Container)
 		return cnt.remove()
 	})
 	return err
@@ -320,8 +330,9 @@ func (n Node) Remove(force bool, kill bool) error {
 // Status of containers.
 ///////////////////////////////////////////////////////////////////////////////////////////////
 func (n Node) Status() error {
-	err := n.ForAll(func(cont Container) error {
-		return cont.status()
+	err := n.ForAll(func(e *list.Element) error {
+		cnt := e.Value.(Container)
+		return cnt.status()
 	})
 	return err
 }
