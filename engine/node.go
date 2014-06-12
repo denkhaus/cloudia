@@ -77,7 +77,7 @@ func (n Node) ApplyState(cnts []docker.APIContainers) error {
 			n.ForAll(func(e *list.Element) error {
 				cnt := e.Value.(Container)
 				if name[1:] == cnt.FullQualifiedName() { // trim "/"
-					applog.Debugf("Apply Id of container %s on node [%s]", cnt, n)
+					applog.Debugf("Apply Id of container %s on node [%s]", *cnt, n)
 					cnt.SetId(apiCnt.ID)
 					e.Value = cnt
 				}

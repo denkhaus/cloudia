@@ -93,7 +93,7 @@ func (cnt *Container) String() string {
 func (cnt *Container) retrieveState() bool {
 
 	if len(cnt.id) == 0 {
-		applog.Errorf("Container error:: cannot retrieve infos -> id not set")
+		applog.Debugf("Container error:: cannot retrieve infos -> id not set")
 		return false
 	}
 
